@@ -1,969 +1,559 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;
-;   PANEL APPLICATION
+;   M32 Menu {bottom}
 ;
-;   Compile with FASM for Menuet
+;   Copyright 2015 Ville Turjanmaa
 ;
-
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 use32
 
-               org    0x0
+    org  0x0
 
-               db     'MENUET01'        ; 8 byte id
-               dd     0x01              ; header version
-               dd     START             ; start of code
-               dd     I_END             ; size of image ; could be much less
-               dd     0x100000          ; memory for app
-               dd     0x7fff0           ; esp
-               dd     0x0 , 0x0         ; I_Param , I_Icon
+    db	 'MENUET01'		; Header id
+    dd	 0x01			; Version
+    dd	 START			; Start of code
+    dd	 I_END			; Size of image
+    dd	 0x100000		; Memory for app
+    dd	 0x7fff0		; Esp
+    dd	 0x0,0x0		; I_Param,I_Icon
 
-; Constants
+START:				; Start of execution
 
+    mov  eax,58
+    mov  ebx,loadfile
+    int  0x40
 
-OSWORKAREA          equ I_END       ; Place for OS work area, 16KB
+    call get_dimensions
 
-BPP                 equ 3           ; Number of bytes per pixel
-BMPHEADER           equ 18*3        ; Header part of bmp file
+    call read_applications
 
-PANEL_DEPTH         equ 42          ; Number of rows in panel image
-PANEL_MAX_WIDTH     equ 1280        ; Maximum width of Panel image
-
-; This is also a temporary work area for building the free-form
-; window data
-PANEL_AREA          equ OSWORKAREA + 0x4000 
-
-; memory location of 'constructed' image prior to display
-PANEL_IMAGE         equ PANEL_AREA + ( PANEL_DEPTH * PANEL_MAX_WIDTH )
-
-; memory location of main bmp image read in from ram disk
-BMP_1               equ PANEL_IMAGE + ( BPP * PANEL_DEPTH * PANEL_MAX_WIDTH )
-BMP_1_WIDTH         equ 140         ; The width of the original image
-BMP_1_DEPTH         equ PANEL_DEPTH ; The height of the panel image
-
-BMP_SCL             equ 1024 + BMP_1 + BMPHEADER + (BPP * BMP_1_DEPTH \
-                                                           * BMP_1_WIDTH)
-BMP_SCL_WIDTH       equ 14         ; The width of the original image
-BMP_SCL_DEPTH       equ 26         ; The height of the panel image
-
-BMP_SCC             equ 1024 + BMP_SCL + BMPHEADER + (BPP * BMP_SCL_DEPTH \
-                                                          * (BMP_SCL_WIDTH+3))
-BMP_SCC_WIDTH       equ 6          ; The width of the original image
-BMP_SCC_DEPTH       equ 26         ; The height of the panel image
-
-BMP_SCR             equ 1024 + BMP_SCC + BMPHEADER + (BPP * BMP_SCC_DEPTH \
-                                                          * (BMP_SCC_WIDTH+3))
-BMP_SCR_WIDTH       equ 18         ; The width of the original image
-BMP_SCR_DEPTH       equ 26         ; The height of the panel image
-
-BMP_BC              equ 1024 + BMP_SCR + BMPHEADER + (BPP * BMP_SCR_DEPTH \
-                                                          * (BMP_SCR_WIDTH+3))
-BMP_BC_WIDTH        equ 47         ; The width of the original image
-BMP_BC_DEPTH        equ 34         ; The height of the panel image
-
-
-; Reserve 13 bytes for each entry - the 12 bytes of the appname plus 1 null
-RUNNINGAPPS         equ 1024 + BMP_BC + BMPHEADER + (BPP * BMP_BC_DEPTH \
-                                                           * (BMP_BC_WIDTH+3))
-
-CLOCK_X             equ 155
-CLOCK_Y             equ 6
-CLOCK_COLOUR        equ 0x00000000
-
-APP_X               equ 217
-APP_Y               equ 6
-APP_INC             equ 32
-APP_COLOUR          equ 0x00808080
-
-
-
-
-
-;***************************************************************************
-;   Function
-;      START
-;
-;   Description
-;       Entry point of the application
-;
-;***************************************************************************
-START:
-    ; Get the screen resolution
-    mov     eax,14
-    int     0x40
-    
-    movzx   ebx, ax
-    mov     [scrSizeY], ebx
-    shr     eax, 16
-    mov     [scrSizeX], eax
-    
-    
-    ; Read the Panel bitmaps
-    call    readBitmaps
-    
-    ; Calculate how many processes are running
-    call    numRunningApps
-    
-    ; Read the name strings of running apps
-    call    readAppNames
-
-    ; Create the panel image
-    call    buildDefaultPanel
-
-    ; Create the free-form window definition, and apply it    
-    call    setWindowForm
-
-    call    draw_window
+    call draw_window
 
 still:
 
-    mov     eax, 23                  ; wait here for event
-    mov     ebx, 100
-    int     0x40
-
-    cmp     eax,1                   ; redraw request ?
-    je      red
-    cmp     eax,2                   ; key in buffer ?
-    je      key
-    cmp     eax,3                   ; button in buffer ?
-    je      button
-    
-    ; Just redraw the clock, and check for a change in running apps
-    call    numRunningApps
-    cmp     ebx, 0
-    je      showclock
-    
-    ; Redraw the panel bar.
-    call    readAppNames
-    call    buildDefaultPanel
-    call    draw_window
-    call    showTime
-    jmp     still
-    
-showclock:    
-    mov     eax, 3                      ; Get time
-    int     0x40
-    and     eax, 0x00FF0000
-    cmp     [lastsecs], eax
-    je      still
-    call    showTime
-    jmp     still
-
-red:        
-    ; Mouse button pressed?
-    mov     eax, 37
-    mov     ebx, 2
-    int     0x40
-    cmp     eax, 0
-    je      nomenu
-
-    ; get mouse x/y
-    mov     eax, 37
-    mov     ebx, 1
-    int     0x40
-    
-    mov     ebx, eax
-    shr     ebx, 16             ; ebx = x
-    
-    ; Is the mouse in the window?
-    cmp     ebx, BMP_1_WIDTH - 10
-    jae     nomenu
-    
-    ; Yes, so convert the y position to an index
-    ; into the menu
-    mov     ecx, eax
-    and     ecx, 0xFFFF         ; ecx = y
-    cmp     ecx, BMP_1_DEPTH - 5
-    jae     nomenu
-
-    mov     eax, 0
-    jmp     dored
-    
-nomenu:
-    mov     eax, -1
-
-dored:
-
-    push    eax
-    call    draw_window
-    pop     eax
-
-    cmp     eax, 0
-    jne     nodobutton
-    call    dobutton
-  nodobutton:
-
-    jmp     still
-
-key:                                ; key
-    mov     eax,2                   ; just read it and ignore
-    int     0x40
-    jmp     still
-
-button:                             ; button
-    mov     eax,17                  ; get id
-    int     0x40
-    
-    cmp     ah,1                    ; button id=1 ?
-    jne     still
-
-    call    dobutton
-    jmp     still
-
-
-dobutton:
-
-    ; Mouse button released?
-
-  red001:
-
-    mov     eax , 5
-    mov     ebx , 1
-    int     0x40
-
-    mov     eax, 37
-    mov     ebx, 2
-    int     0x40
-
-    cmp     eax, 0
-    jne     red001
-
-    call    closeMenus
-    
-    ; Did we actually close any?
-    cmp     eax, 0
-    jne     nostill                  ; We closed some, so dont open
-    
-    ; Run the menu application
-    mov     eax,58
-    mov     ebx,startfile
-    int     0x40
-
-  nostill:
-
-    mov     eax,17                  ; read buttons from buffer
-    int     0x40
-
-    ret
-
- ;   jmp     still
-
-
-;***************************************************************************
-;   Function
-;      numRunningApps
-;
-;   Description
-;       Reads the number of running apps. If it is different to last time,
-;       ebx == 1, else ebx == 0
-;
-;***************************************************************************
-numRunningApps:
-    mov     eax, 9
-    mov     ebx, OSWORKAREA             ; Temporary work area
-    mov     ecx, -1
-    int     0x40
-    
-    
-    mov     ecx, eax
-    mov     eax, 0
-nra000:
-    push    ecx
-    push    eax
-    mov     ebx, OSWORKAREA
-    mov     eax, 9
-    int     0x40
-    pop     eax
-    pop     ecx
-    
-    mov     esi, OSWORKAREA + 10    ; App name string
-    cmp     [esi], dword '    '        
-    je      nra001
-    
-    inc     eax
-    
-nra001:    
-    loop    nra000
-    
-    xor     ebx, ebx
-    cmp     eax, [numApps]
-    je      @f
-    mov     [numApps], eax
-    inc     ebx
-    
-@@:
-    ret
-
-
-;***************************************************************************
-;   Function
-;      readAppNames
-;
-;   Description
-;       Reads the names of the first 20 valid applications that are running
-;       These will be displayed on the Panel bar.
-;       Some running apps are ignored, because they are system apps; 
-;       eg mpanel, mmenu, icon
-;
-;***************************************************************************
-readAppNames:
-    mov     ebx, [numApps]
-    xor     edx, edx                ; edx counts app entries
-    mov     ecx, edx
-    mov     edi, RUNNINGAPPS
-
- inc ecx
-    
-ran001:    
-    pusha
-    mov     ebx, OSWORKAREA
-    mov     eax, 9
-    int     0x40
-    popa
-        
-    ; if app name is not acceptable, skip
-    ; save ecx, edx, edi
-    mov     esi, OSWORKAREA + 10    ; App name string
-    cmp     [esi], dword 'ICON'
-    je      ran002
-    cmp     [esi], dword 'PANE'
-    je      ran002
-    cmp     [esi], dword 'MPAN'
-    je      ran002
-    cmp     [esi], dword 'SELE'
-    je      ran002
-    cmp     [esi], dword 'MENU'
-    je      ran002
-    cmp     [esi], dword 'MMEN'
-    je      ran002
-    cmp     [esi], dword 'OS/I'
-    je      ran002
-    cmp     [esi], dword '    '
-    jne     ran003
-
-    inc     ebx
-    jmp     ran002
-
-ran003:
-    push    ecx
-    mov     ecx, 12
-    mov     esi, OSWORKAREA + 10    ; App name string
-    cld
-    rep     movsb
-    mov     [edi], byte 0
-    inc     edi
-    pop     ecx
-    
-    inc     edx
-    cmp     edx, 20
-    je      ranexit
-    
-ran002:    
-    inc     ecx
-    cmp     ecx, ebx
-;    jne     ran001
-  jna     ran001   
-ranexit:    
-    mov     [numDisplayApps], edx
-    ret
-    
-
-
-;***************************************************************************
-;   Function
-;      closeMenus
-;
-;   Description
-;       searches the process table for MMENU apps, and closes them
-;       returns eax = 1 if any closed, otehrwise eax = 0
-;
-;***************************************************************************
-closeMenus:
-
-    mov     eax, 9
-    mov     ebx, OSWORKAREA             ; Temporary work area
-    mov     ecx, -1
-    int     0x40
-    
-    mov     ecx, eax                    ; Get number of apps    
-    
-    xor     eax, eax                    ; Return value; 0 = no menus closed
-    
-cm001:
-    pusha
-    mov     eax, 9
-    mov     ebx, OSWORKAREA             ; Temporary work area
-    int     0x40                        ; get process info
-    popa
-    
-    ; Is this 'me'? If it is, dont kill me yet!
-    cmp     [OSWORKAREA + 30], ebx
-    je      cm002
-    
-    ; Is this a MMENU app to kill?
-    push    ecx
-    mov     edi, appname
-    mov     esi, OSWORKAREA + 10
-    mov     ecx, 12
-    repe    cmpsb
-    cmp     ecx, 0
-    pop     ecx
-    jne     cm002
-
-    ; Close the app
-    push    eax
-    mov     ebx, 2
-    mov     eax, 18
-    int     0x40
-    pop     eax
-    
-    mov     eax, 1                      ; Indicate that we closed a menu
-    
-cm002:
-    loop    cm001
-
-    ret
-
-
-;***************************************************************************
-;   Function
-;      buildDefaultPanel
-;
-;   Description
-;       Constructs the panel picture by copying in small bits of the image
-;       from pre-loaded bmp files
-;
-;***************************************************************************
-buildDefaultPanel:
-    mov     ecx, BMP_1_DEPTH
-    mov     esi, BMP_1 + BMPHEADER
-    mov     edi, PANEL_IMAGE
-    cld     
-fill1:
-    push    ecx
-    ; Copy the image..
-    mov     ecx, BMP_1_WIDTH * BPP
-    rep     movsb
-    ; Now fill to right hand side of screen
-    ; This copied not just the image, but the
-    ; 'shape' of the image ( the black part )
-    mov     ecx, [scrSizeX]
-    sub     ecx, BMP_1_WIDTH
-    mov     eax, [edi-3]
-fill2:
-    mov     [edi], eax
-    add     edi, 3
-    loop    fill2      
-    pop     ecx
-    loop    fill1
-
-    mov     edi, PANEL_IMAGE + (BMP_1_WIDTH * BPP)
-
-    ; Display the slot for the time
-    mov     ecx, 5
-    call    drawSlot
-
-    ; Calculate where the last slot can be displayed
-    mov     ebx, [scrSizeX]     ; The length of each screen line, in bytes
-    imul    ebx, BPP
-    mov     edx, PANEL_IMAGE
-    add     edx, ebx            ; The top righthand pos
-    sub     edx, (BMP_BC_WIDTH+BMP_SCL_WIDTH+(8*BMP_SCC_WIDTH)+ \
-                                                      BMP_SCR_WIDTH) * BPP
-     
-    mov     ecx, 0
-    mov     esi, RUNNINGAPPS
-bdp000:
-    cmp     ecx, [numDisplayApps]
-    je      bdp001              ; Displaying all apps, so finish
-    push    ecx
-    push    edx
-    push    esi
-    call    strLen     
-    call    drawSlot
-    pop     esi
-    pop     edx
-    pop     ecx
-    inc     ecx
-    add     esi, 13
-    cmp     edi, edx     
-    jbe     bdp000              ; Run out of space to display
-    
-bdp001:  
-    mov     [displayedApps], ecx
-
-    ; Now the closing part of the big curve
-    mov     ecx, BMP_BC_DEPTH
-    mov     esi, BMP_BC + BMPHEADER
-       
-    mov     ebx, [scrSizeX]     ; The length of each screen line, in bytes
-    imul    ebx, BPP
-    
-    mov     edx, PANEL_IMAGE
-    add     edx, ebx            ; The top righthand pos
-    
-fill6:
-    push    ecx
-    push    edi
-    ; Copy the image..
-    push    esi
-    mov     ecx, BMP_BC_WIDTH * BPP
-    rep     movsb
-    
-    mov     eax, [edi-3]
-fill6_1:
-    mov     [edi], eax
-    add     edi, 3
-    cmp     edi, edx
-    jb      fill6_1
-
-    
-    pop     esi
-    add     esi, ((BMP_BC_WIDTH * BPP) + 3) and 0xFFFC
-    pop     edi
-    add     edi, ebx            ; Move down one line
-    add     edx, ebx
-    pop     ecx
-    loop    fill6
-
-    ret
-
-
-
-;***************************************************************************
-;   Function
-;      strLen
-;
-;   Description
-;       Returns the length of string at esi in ecx
-;       string is 'terminated' by null or space
-;
-;***************************************************************************
-strLen:
-    push    esi
-
-    dec     esi
-    xor     ecx, ecx
-sl001:
-    inc     esi
-    cmp     [esi], byte '0'
-    je      slexit
-    cmp     [esi], byte ' '
-    je      slexit
-    inc     ecx
-    jmp     sl001
-slexit: 
-    pop     esi   
-
-    ret    
-
-
-
-;***************************************************************************
-;   Function
-;      drawSlot
-;
-;   Description
-;       Copies a time/appname slot into the panel image
-;       location ( top line position ) pointed to by edi
-;       width ( number of characters ) in ecx
-;
-;***************************************************************************
-drawSlot:
-    ; Add in the small curve for the clock
-    ; Note, we do funny maths here because the bmp image
-    ; is stored with a multiple of 4 pixels per row
-    
-    push    ecx                 ; save num characters
-    
-    mov     ecx, BMP_SCL_DEPTH
-    mov     esi, BMP_SCL + BMPHEADER
-    
-    push    edi
-       
-    mov     ebx, [scrSizeX]     ; The length of each screen line, in bytes
-    imul    ebx, BPP
-       
-fill3:
-    push    ecx
-    push    edi
-    ; Copy the image..
-    push    esi
-    mov     ecx, BMP_SCL_WIDTH * BPP
-    rep     movsb
-    pop     esi
-    add     esi, ((BMP_SCL_WIDTH * BPP) + 3) and 0xFFFC
-    pop     edi
-    add     edi, ebx            ; Move down one line
-    pop     ecx
-    loop    fill3
-    
-    pop     edi    
-    add     edi, BMP_SCL_WIDTH * BPP
-
-
-    mov     ebx, [scrSizeX]     ; The length of each screen line, in bytes
-    imul    ebx, BPP
-    pop     ecx
-fill4_1:
-    push    edi
-    push    ecx
-    
-    mov     ecx, BMP_SCC_DEPTH
-    mov     esi, BMP_SCC + BMPHEADER
-       
-fill4:
-    push    ecx
-    push    edi
-    ; Copy the image..
-    push    esi
-    mov     ecx, BMP_SCC_WIDTH * BPP
-    rep     movsb
-    pop     esi
-    add     esi, ((BMP_SCC_WIDTH) * BPP + 3) and 0xFFFC
-    pop     edi
-    add     edi, ebx            ; Move down one line
-    pop     ecx
-    loop    fill4
-
-    pop     ecx
-    pop     edi
-    add     edi, BMP_SCC_WIDTH * BPP
-    loop    fill4_1
-
-
-    ; Now the closing part of the small curve
-    mov     ecx, BMP_SCR_DEPTH
-    mov     esi, BMP_SCR + BMPHEADER
-       
-    mov     ebx, [scrSizeX]     ; The length of each screen line, in bytes
-    imul    ebx, BPP
- 
-    push    edi
-          
-fill5:
-    push    ecx
-    push    edi
-    ; Copy the image..
-    push    esi
-    mov     ecx, BMP_SCR_WIDTH * BPP
-    rep     movsb
-    pop     esi
-    add     esi, ((BMP_SCR_WIDTH * BPP) + 3) and 0xFFFC
-    pop     edi
-    add     edi, ebx            ; Move down one line
-    pop     ecx
-    loop    fill5
-
-    pop     edi
-    
-    add     edi, BMP_SCR_WIDTH * BPP 
-
-    ret
-
-
-
-;***************************************************************************
-;   Function
-;      setWindowForm
-;
-;   Description
-;       Scans the panel image looking for the curved outline, so it can 
-;       generate a free-form outline window
-;
-;***************************************************************************
-setWindowForm:
-    ; Create the free-form pixel map;
-    ; black is the 'ignore' colour
-    mov     esi,0
-    
-    mov     edx, [scrSizeX]
-    imul    edx, PANEL_DEPTH
-    
-newpix:
-    mov     eax,[ PANEL_IMAGE + esi*BPP]
-    mov     bl,0
-    and     eax,0xffffff
-    cmp     eax,0x000000
-    je      cred
-    mov     bl,1
-
-cred:
-    mov     [esi+ PANEL_AREA ],bl
-    inc     esi
-    cmp     esi,edx
-    jbe     newpix
-
-    ; set the free-form window in the OS
-    mov  eax,50
-    mov  ebx,0
-    mov  ecx,PANEL_AREA
+    mov  eax,23 		; Wait here for event
+    mov  ebx,100
     int  0x40
+
+    cmp  eax,1			; Redraw request
+    je	 red
+    cmp  eax,2			; Key in buffer
+    je	 key
+    cmp  eax,3			; Button in buffer
+    je	 button
+
+    call draw_time
+
+    push dword [checksum]
+    call read_applications
+    pop  eax
+    cmp  eax , [checksum]
+    je	 still
+
+    call draw_window
+    jmp  still
+
+red:				; Redraw
+    call draw_window
+    jmp  still
+
+key:				; Key
+    mov  eax,2			; Just read it and ignore
+    int  0x40
+
+    jmp  still
+
+button: 			; Button
+    mov  eax,17 		; Get id
+    int  0x40
+
+    shr  eax , 8
+
+    cmp  eax , 100
+    jne  nomenustart
+
+    ; mdm at processes ?
+    mov  ecx , 1
+  newprocesscheck:
+    mov  ebx , processtable
+    mov  eax , 9
+    int  0x40
+    cmp  [processtable+50],byte 0
+    jne  nomdm
+    mov  eax , [processtable+10]
+    and  eax , 0xffffff
+    cmp  eax , 'MDM'
+    je	 newl1
+  nomdm:
+    add  ecx , 1
+    cmp  ecx , 250
+    jb	 newprocesscheck
+    jmp  startmenu
+    ;
+  newl1:
+
+    mov  eax , 60
+    mov  ebx , 2
+    mov  ecx , [childpid]
+    mov  edx , ipcmessage
+    mov  esi , 1
+    mov  edi , 1
+    int  0x40
+    mov  [childpid],dword 0
+    jmp  still
+
+  startmenu:
+    mov  eax , 58
+    mov  ebx , startapp
+    int  0x40
+    mov  ecx , eax
+    mov  ebx , processtable
+    mov  eax , 9
+    int  0x40
+    mov  eax , [processtable+30]
+    mov  [childpid],eax
+    jmp  still
+  nomenustart:
+
+    jmp  still
+
+
+get_dimensions:
+
+    mov  eax , 14
+    int  0x40
+
+    add  ax , 1
+    mov  [screeny],ax
+    shr  eax , 16
+    add  ax , 1
+    mov  [screenx],ax
+
     ret
-    
-    
-
-;***************************************************************************
-;   Function
-;      readBitmaps
-;
-;   Description
-;       Loads the picture elements used to construct the panel image
-;
-;***************************************************************************
-readBitmaps:
-    ; Main panel button, plus curves
-    mov     eax, 58
-    mov     ebx, pbutton
-    int     0x40
-    mov     eax, 58
-    mov     ebx, scc
-    int     0x40
-    mov     eax, 58
-    mov     ebx, scl
-    int     0x40
-    mov     eax, 58
-    mov     ebx, scr
-    int     0x40
-    mov     eax, 58
-    mov     ebx, bc
-    int     0x40    
-    ret
-    
 
 
-;   *********************************************
-;   *******  WINDOW DEFINITIONS AND DRAW ********
-;   *********************************************
 draw_window:
-    mov     eax,12                     ; function 12:tell os about windowdraw
-    mov     ebx,1                      ; 1, start of draw
-    int     0x40
 
-                                    ; DRAW WINDOW
-    mov     eax,0                      ; function 0 : define and draw window
-    mov     ebx, [scrSizeX]
-    dec     ebx
-    mov     ecx,0*65536+PANEL_DEPTH             ; [y start] *65536 + [y size]
-    mov     edx,0x01000000 ; 0x02ffffff  ; col of work area RRGGBB,8->color gl
-    mov     esi,0x815080d0             ; color of grab bar  RRGGBB,8->color gl
-    mov     edi,0x005080d0             ; color of frames    RRGGBB
-    int     0x40
+    mov  eax,12 		; Function 12: window draw
+    mov  ebx,1			; Start of draw
+    int  0x40
 
-                                    ; MENU BUTTON
-    mov     eax,8                      ; function 8 : define and draw button
-    mov     ebx,0*65536+BMP_1_WIDTH - 10    ; [x start] *65536 + [x size]
-    mov     ecx,0*65536+BMP_1_DEPTH - 5    ; [y start] *65536 + [y size]
-    mov     edx,0x60000001             ; button id
-    mov     esi,0x6688dd               ; button color RRGGBB
-    int     0x40
+				; DRAW WINDOW ( Type 4 )
+    mov  eax,0			; Function 0 : define and draw window
+    mov  ebx,[screenx]
+    sub  ebx,1
+    mov  ecx,[screeny]
+    sub  ecx,30
+    shl  ecx,16
+    add  ecx,29
+    mov  edx,0x01000000 	; Color of work area RRGGBB,8->color gl
+    mov  esi,0x01000000 	; Pointer to window label (asciiz) or z
+    mov  edi,0;                 ; Pointer to menu struct or zero
+    int  0x40
 
-                                    ; Place the image on the screen
-    mov     eax,7
-    mov     ebx,PANEL_IMAGE    
-    mov     ecx, [scrSizeX]
-    shl     ecx, 16
-    add     ecx, PANEL_DEPTH
-    mov     edx,0
-    int     0x40
-    
-    call    showTime                    ; display the time
-    call    showApps                    ; You can guess what this does
-    
-    mov     eax,12                    ; function 12:tell os about windowdraw
-    mov     ebx,2                     ; 2, end of draw
-    int     0x40
+    mov  eax, 38
+    mov  ebx, [screenx]
+    mov  ecx, 0
+    mov  edx, 0xc0c0c0
+  newline:
+    int  0x40
+    sub  edx , 0x030303
+    add  ecx , 1 shl 16 + 1
+    cmp  cx  , 29
+    jb	 newline
+
+    mov  eax, 38
+    mov  ebx, [screenx]
+    mov  ecx, 0
+    mov  edx, 0xf0f0f0
+    int  0x40
+
+    mov  eax,8
+    mov  ebx,20 shl 16 + 89
+    mov  ecx,4	shl 16 + 19
+    mov  edx,100
+    mov  esi,0x20d4d4d4
+    int  0x40
+
+    mov  eax,7
+    mov  ebx,0x20000+140*3*13+3*48
+    mov  ecx,74 shl 16 + 1
+    mov  edx,29 shl 16 + 9
+  newpicline:
+    push eax ebx ecx edx
+    int  0x40
+    pop  edx ecx ebx eax
+    add  edx,1
+    add  ebx,140*3
+    cmp  dx,22
+    jb	 newpicline
+
+    mov  ebx,21 shl 16 + 89
+    mov  ecx,5	shl 16 + 19
+    mov  ebp,0xffffff
+    mov  edi,ebp
+    call draw_rectangle
+    mov  ebx,20 shl 16 + 89
+    mov  ecx,4	shl 16 + 19
+    mov  ebp,0x606060
+    mov  edi,ebp
+    call draw_rectangle
+
+    mov  ecx, [screenx]
+    sub  ecx, 80
+    call draw_separator
+    mov  ecx, 131
+    call draw_separator
+
+    call draw_time
+
+    mov  [checksum],dword 0
+    call display_applications
+
+    mov  eax,12 		; Function 12: window draw
+    mov  ebx,2			; End of draw
+    int  0x40
+
+    ret
+
+
+draw_time:
+
+    mov  eax , 3
+    int  0x40
+
+    mov  ebp , eax
+
+    mov  ebx , eax
+    and  eax , 0x07
+    add  eax , '0'
+    mov  ecx , ebx
+    and  ecx , 0x70
+    shr  ecx , 4
+    add  ecx , '0'
+    mov  [text+0],cl
+    mov  [text+1],al
+
+    shr  ebx , 8
+    mov  eax , ebx
+    and  eax , 0x07
+    add  eax , '0'
+    mov  ecx , ebx
+    and  ecx , 0x70
+    shr  ecx , 4
+    add  ecx , '0'
+    mov  [text+3],cl
+    mov  [text+4],al
+
+    mov  [text+2],byte ':'
+    test ebp , 0x010000
+    jz	 dtl1
+    mov  [text+2],byte ' '
+  dtl1:
+
+    mov  eax,13
+    mov  ebx,[screenx]
+    sub  ebx,60
+    shl  ebx,16
+    add  ebx,5*6-2+2*5
+    mov  ecx,7 shl 16 + 14
+    mov  edx,0xc0c0c0
+    int  0x40
+
+    mov  ebp,0x505050
+    mov  edi,0xf0f0f0
+    call draw_rectangle
+
+    mov  eax,4			; Draw info text
+    mov  ebx,[screenx]
+    sub  ebx,55
+    shl  ebx,16
+    add  ebx,11
+    mov  ecx,0x000000
+    mov  edx,text
+    mov  esi,-1
+    int  0x40
+
+    ret
+
+draw_separator:
+
+    mov  eax, 38
+    mov  ebx, ecx
+    shl  ebx, 16
+    add  bx , cx
+    mov  ecx, 27
+    mov  edx, 0xe0e0e0
+    int  0x40
+    add  ebx, 1 shl 16 + 1
+    mov  edx, 0x606060
+    int  0x40
+
+    ret
+
+draw_rectangle:
+
+    mov  eax,38
+    movzx edx,bx
+    shr  ebx,16
+    add  edx,ebx
+    shl  ebx,16
+    add  ebx,edx
+    movzx edx,cx
+    shr  ecx,16
+    add  edx,ecx
+    shl  ecx,16
+    add  ecx,edx
+    push ebx
+    mov  esi,ebx
+    shr  esi,16
+    mov  bx ,si
+    mov  edx,ebp
+    int  0x40
+    pop  ebx
+    push ebx
+    mov  esi,ebx
+    and  esi,0xffff
+    mov  bx ,si
+    shl  ebx,16
+    mov  bx,si
+    mov  edx,edi
+    int  0x40
+    pop  ebx
+    push ecx
+    mov  esi,ecx
+    shr  esi,16
+    mov  cx ,si
+    mov  edx,ebp
+    int  0x40
+    pop  ecx
+    push ecx
+    mov  esi,ecx
+    and  esi,0xffff
+    mov  cx ,si
+    shl  ecx,16
+    mov  cx,si
+    mov  edx,edi
+    int  0x40
+    pop  ecx
+
+    ret
+
+
+read_applications:
+
+    mov  [appcount],dword 0
+    mov  edi , apps
+    mov  ecx , 32*256
+    mov  eax , 0
+    cld
+    rep  stosb
+
+    mov  [checksum],dword 0
+
+    mov  ecx , 1
+
+  newappread:
+
+    mov  eax , 9
+    mov  ebx , osworkarea
+    int  0x40
+
+    push ecx
+
+    mov  esi , osworkarea+10
+    mov  edi , ecx
+    imul edi , 32
+    add  edi , apps
+    mov  ecx , 32
+    cld
+    rep  movsb
+
+    mov  eax , [osworkarea]
+    add  [checksum],eax
+
+    pop  ecx
+
+    add  ecx , 1
+
+    cmp  ecx , 64
+    jb	 newappread
+
+    mov  [appcount],dword 64
+
+    ret
+
+
+display_applications:
+
+    mov  [appx],dword 10
+    mov  [appp],dword apps
+    mov  [appl],dword 4*6+13
+
+    mov  eax , 1
+    mov  edi , apps
+
+  newappdisplay:
+
+    push eax edi
+
+    cmp  [edi],dword 'OS/I'
+    je	 noappdisplay
+    cmp  [edi],dword 'ICON'
+    je	 noappdisplay
+    cmp  [edi],word 'MD'
+    je	 noappdisplay
+    cmp  [edi],dword 'MPAN'
+    je	 noappdisplay
+
+    mov  eax,edi
+    mov  ebx,0
+  newlen:
+    cmp  [eax],byte 32
+    jbe  lenfound
+    add  ebx , 1
+    add  eax , 1
+    jmp  newlen
+  lenfound:
+
+    cmp  ebx , 0
+    je	 noappdisplay
+
+    imul ebx , 6
+    add  ebx , 13
+    mov  [appl],ebx
+
+    add  ebx , [appx]
+    add  ebx , 250
+    cmp  ebx , [screenx]
+    jae  appsdone
+
+    mov  [appp],dword edi
+    call draw_app
+
+    mov  eax , [appl]
+    add  eax , 6*3
+    add  [appx],eax
+
+  noappdisplay:
+
+    pop  edi eax
+
+    add  edi , 32
+    add  eax , 1
+
+    cmp  eax , [appcount]
+    jbe  newappdisplay
+
+    ret
+
+  appsdone:
+
+    pop  edi eax
+
+    ret
+
+
+draw_app:
+
+    mov  eax,13
+    mov  ebx,[appx]
+    add  ebx,143
+    shl  ebx,16
+    add  ebx,[appl]
+    mov  ecx,6 shl 16 + 14+2
+    mov  edx,0xc0c0c0
+    int  0x40
+
+    mov  ebp,0x505050
+    mov  edi,0xf0f0f0
+    call draw_rectangle
+
+    mov  eax,4			; Draw info text
+    mov  ebx,[appx]
+    add  ebx,143+8
+    shl  ebx,16
+    add  ebx,11
+    mov  ecx,0x000000
+    mov  edx,[appp]
+    mov  esi,-1
+    int  0x40
 
     ret
 
 
 
 
-;***************************************************************************
-;   Function
-;      showTime
-;
-;   Description
-;       Updates the time on the panel
-;
-;***************************************************************************
-showTime:
-    ; blank out old time    
-    mov     eax,7
-    mov     ebx,PANEL_IMAGE + (CLOCK_X * BPP)    
-    mov     ecx, (BMP_SCC_WIDTH * 5 * 65536) + 1
-    mov     edx,CLOCK_X * 65536 + CLOCK_Y
-st001:
-    pusha
-    int     0x40
-    popa
-    inc     edx
-    cmp     edx, CLOCK_X * 65536 + CLOCK_Y + 8    
-    jne     st001
-    
-    call    setTimeStr
+; DATA AREA
 
-    mov     eax, 4                     ; Write text to display
-    mov     ebx, (CLOCK_X * 65536) + CLOCK_Y
-    mov     ecx, CLOCK_COLOUR
-    mov     edx, clockStr
-    mov     esi, 5                  ; 5 digits in clock hh:mm
-    int     0x40  
-    ret
-    
+text:
 
+    db	 '15:28',0
 
-;***************************************************************************
-;   Function
-;      showApps
-;
-;   Description
-;       Writes the application names to the display
-;
-;***************************************************************************
-showApps:
-    mov     esi, RUNNINGAPPS
-    mov     ebx, (APP_X * 65536) + APP_Y
-    
-    mov     ecx, [displayedApps]
-    
-    cmp     ecx, 0
-    jne     sa001
-    ret
+screenx: dq 0x0
+screeny: dq 0x0
 
-sa001:
-    pusha
-    call    strLen                      ; ecx has length of string @ esi
-    mov     edx, esi
-    mov     esi, ecx
+appx:	 dd 0
+appp:	 dd 0
+appl:	 dd 0
 
-    mov     eax, 4                     ; Write text to display
-    mov     ecx, APP_COLOUR
-    int     0x40
-    popa
-    push    ecx
-    call    strLen                      ; ecx has length of string @ esi
-    imul    ecx, 6
-    add     ecx, APP_INC
-    shl     ecx, 16
-    add     ebx, ecx
-    pop     ecx
-    add     esi, 13
-    loop    sa001
-    ret
+checksum: dq 0x0
 
-    
+menu_struct:		   ; Menu Struct
 
-;***************************************************************************
-;   Function
-;      setTimeStr
-;
-;   Description
-;       Reads the time and places it in a string.
-;       The : character is alternated every second
-;
-;***************************************************************************
-setTimeStr:
-    mov     eax, 3                      ; Get time
-    int     0x40
-    mov     ecx, '0'
-    mov     ebx, eax
-    and     ebx, 0xF0
-    shr     ebx, 4
-    add     ebx, ecx
-    mov     [clockStr], bl
-    mov     ebx, eax
-    and     ebx, 0x0F
-    add     ebx, ecx
-    mov     [clockStr+1], bl
-    mov     ebx, eax
-    and     ebx, 0xF000
-    shr     ebx, 12
-    add     ebx, ecx
-    mov     [clockStr+3], bl
-    mov     ebx, eax
-    and     ebx, 0x0F00
-    shr     ebx, 8
-    add     ebx, ecx
-    mov     [clockStr+4], bl
+    dq	 0		   ; Version
 
-    and     eax, 0x00FF0000
-    mov     [lastsecs], eax
-    
-    mov     bl, ':'
-    and     eax, 0x00010000
-    cmp     eax, 0
-    je      sts001
-    mov     bl, ' '
-sts001:
-    mov     [clockStr+2], bl
+    dq	 0x100		   ; Start value of ID to return ( ID + Line )
 
-    ret
+			   ; Returned when menu closes and
+			   ; user made no selections.
 
+    db	 0,'FILE',0	   ; ID = 0x100 + 1
+    db	 1,'New',0	   ; ID = 0x100 + 2
+    db	 1,'Open..',0	   ; ID = 0x100 + 3
+    db	 1,'Save..',0	   ; ID = 0x100 + 4
+    db	 1,'-',0	   ; ID = 0x100 + 5
+    db	 1,'Quit',0	   ; ID = 0x100 + 6
 
+    db	 0,'HELP',0	   ; ID = 0x100 + 7
+    db	 1,'Contents..',0  ; ID = 0x100 + 8
+    db	 1,'About..',0	   ; ID = 0x100 + 9
 
-; Data area
-lastsecs    dd  0
-scrSizeX    dd  0                   ; Resolution of screen
-scrSizeY    dd  0                   ; Resolution of screen
-appname     db  'MMENU       '
-numApps     dd  0                   ; Number of running applications
-numDisplayApps  dd 0
-displayedApps   dd  0
+    db	 255		   ; End of Menu Struct
 
-clockStr    db '12:34'
+startapp:
 
-pbutton:
-    dd  0
-    dd  0
-    dd  -1                          ; Amount to load - all of it
-    dd  BMP_1                       ; Place to store file data
-    dd  OSWORKAREA                  ; os work area - 16KB
-    db  '/rd/1/mpanel.bmp',0
+    dd	 16
+    dd	 0
+    dd	 param
+    dd	 0
+    dd	 0x10000
+    db	 '/rd/1/mdm',0
 
-scl:
-    dd  0
-    dd  0
-    dd  -1                          ; Amount to load - all of it
-    dd  BMP_SCL                     ; Place to store file data
-    dd  OSWORKAREA                  ; os work area - 16KB
-    db  '/rd/1/scl.bmp',0
+param: db 'AA.00000000.MAINMENU.',0
 
-scc:
-    dd  0
-    dd  0
-    dd  -1                          ; Amount to load - all of it
-    dd  BMP_SCC                     ; Place to store file data
-    dd  OSWORKAREA                  ; os work area - 16KB
-    db  '/rd/1/scc.bmp',0
+loadfile:
 
-scr:
-    dd  0
-    dd  0
-    dd  -1                          ; Amount to load - all of it
-    dd  BMP_SCR                     ; Place to store file data
-    dd  OSWORKAREA                  ; os work area - 16KB
-    db  '/rd/1/scr.bmp',0
-    
-bc:
-    dd  0
-    dd  0
-    dd  -1                          ; Amount to load - all of it
-    dd  BMP_BC                      ; Place to store file data
-    dd  OSWORKAREA                  ; os work area - 16KB
-    db  '/rd/1/bc.bmp',0
+    dd	 0
+    dd	 0
+    dd	 100
+    dd	 0x20000
+    dd	 0x10000
+    db	 '/rd/1/mpanel.bmp',0
 
+appcount:   dd 0
+childpid:   dq 0x0
+ipcmessage: db 'T',0
 
-startfile:
-    dd  16                          ; Start file option
-    dd  0                           ; Reserved, 0
-    dd  params                      ; Parameters - MAINMENU
-    dd  0                           ; Reserved, 0
-    dd  OSWORKAREA                  ; OS work area - 16KB
-    db  '/rd/1/mmenu',0
-params:
-    db  'MAINMENU 9 28',0
+processtable: times 2000 db ?
+
+osworkarea: times 1024*16 db ?
+
+apps:
 
 I_END:
+
 
 
 

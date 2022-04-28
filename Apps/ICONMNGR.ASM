@@ -162,6 +162,7 @@ still:
     sub  eax,65
     imul eax,80
     add  eax,34 + 9 ; Leave space for Panel
+    sub  eax,23 ; down
     jmp  y_done
   no_up:
     sub  eax,65
@@ -174,6 +175,7 @@ still:
     pop  ebx
     and  eax,0xffff
     sub  eax,-1+80
+    sub  eax,16 ; down
     sub  eax,ebx
   y_done:
     add  eax,0x01010101

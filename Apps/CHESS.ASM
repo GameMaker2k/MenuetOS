@@ -1,5 +1,7 @@
 ;
-;    CHESS CLIENT for CHESSCLUB.COM (VT)
+;    CHESS CLIENT for CHESSCLUB.COM
+;
+;    Copyright Ville Turjanmaa
 ;
 ;    Compile with FASM for Menuet
 ;
