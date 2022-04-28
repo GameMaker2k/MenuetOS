@@ -10,15 +10,15 @@ use32
 
     org  0x0
 
-    db	 'MENUET01'		; Header id
-    dd	 0x01			; Version
-    dd	 START			; Start of code
-    dd	 I_END			; Size of image
-    dd	 0x100000		; Memory for app
-    dd	 0x7fff0		; Esp
-    dd	 0x0,0x0		; I_Param,I_Icon
+    db  'MENUET01' ; Header id
+    dd  0x01       ; Version
+    dd  START      ; Start of code
+    dd  I_END      ; Size of image
+    dd  0x100000   ; Memory for app
+    dd  0x7fff0    ; Esp
+    dd  0x0,0x0    ; I_Param,I_Icon
 
-START:				; Start of execution
+START:    ; Start of execution
 
     mov  eax,58
     mov  ebx,loadfile
@@ -32,16 +32,24 @@ START:				; Start of execution
 
 still:
 
-    mov  eax,23 		; Wait here for event
-    mov  ebx,100
+    mov  eax,23   ; Wait here for event
+    mov  ebx,2
     int  0x40
 
-    cmp  eax,1			; Redraw request
-    je	 red
-    cmp  eax,2			; Key in buffer
-    je	 key
-    cmp  eax,3			; Button in buffer
-    je	 button
+    cmp  eax,1   ; Redraw request
+    je   red
+    cmp  eax,2   ; Key in buffer
+    je   key
+    cmp  eax,3   ; Button in buffer
+    je   button
+
+    call check_mouse
+
+    add  [loopcount],dword 2
+    cmp  [loopcount],dword 100
+    jb   still
+
+    mov  [loopcount],dword 0
 
     call draw_time
 
@@ -49,23 +57,24 @@ still:
     call read_applications
     pop  eax
     cmp  eax , [checksum]
-    je	 still
+    je   still
 
+    call draw_window
+
+    jmp  still
+
+red:    ; Redraw
     call draw_window
     jmp  still
 
-red:				; Redraw
-    call draw_window
-    jmp  still
-
-key:				; Key
-    mov  eax,2			; Just read it and ignore
+key:    ; Key
+    mov  eax,2   ; Just read it and ignore
     int  0x40
 
     jmp  still
 
-button: 			; Button
-    mov  eax,17 		; Get id
+button:    ; Button
+    mov  eax,17   ; Get id
     int  0x40
 
     shr  eax , 8
@@ -84,11 +93,11 @@ button: 			; Button
     mov  eax , [processtable+10]
     and  eax , 0xffffff
     cmp  eax , 'MDM'
-    je	 newl1
+    je  newl1
   nomdm:
     add  ecx , 1
     cmp  ecx , 250
-    jb	 newprocesscheck
+    jb  newprocesscheck
     jmp  startmenu
     ;
   newl1:
@@ -119,6 +128,86 @@ button: 			; Button
     jmp  still
 
 
+check_mouse:
+
+    mov  eax , 37
+    mov  ebx , 2
+    int  0x40
+
+    cmp  eax , 0
+    je   nobuttondown
+
+    mov   eax , 9
+    mov   ebx , 0x80000
+    mov   ecx , -1
+    int   0x40
+    movzx ecx , word [0x80000+4]
+    cmp   eax , ecx
+    jne   nobuttondown
+
+    mov  eax , 37
+    mov  ebx , 1
+    int  0x40
+
+    cmp  ax , 5
+    jb   nobuttondown
+    cmp  ax , 25
+    ja   nobuttondown
+
+    shr  eax , 16
+
+    ; Clock
+    mov  ebx,[screenx]
+    sub  ebx,60
+    cmp  eax,ebx
+    jb   noclock
+    add  ebx,5*6-2+2*5
+    cmp  eax,ebx
+    ja   noclock
+    mov  eax , 58
+    mov  ebx , startclock
+    int  0x40
+    jmp  newmwait
+  noclock:
+
+    ; Applications
+    mov  ebx , [appcount]
+  newbuttoncheck:
+    cmp  ebx , 0
+    je   nobuttondown
+
+    sub  ebx , 1
+
+    cmp  eax , [appxpos+ebx*4]
+    jb   newbuttoncheck
+    cmp  eax , [appxend+ebx*4]
+    ja   newbuttoncheck
+
+    mov  eax , 18
+    mov  ecx , [appslot+ebx*4]
+    sub  ecx , 1
+    mov  ebx , 3
+    int  0x40
+
+  newmwait:
+
+    mov  eax , 5
+    mov  ebx , 1
+    int  0x40
+
+    mov  eax , 37
+    mov  ebx , 2
+    int  0x40
+
+    cmp  eax , 0
+    jne  newmwait
+
+  nobuttondown:
+
+    ret
+
+
+
 get_dimensions:
 
     mov  eax , 14
@@ -135,21 +224,21 @@ get_dimensions:
 
 draw_window:
 
-    mov  eax,12 		; Function 12: window draw
-    mov  ebx,1			; Start of draw
+    mov  eax,12   ; Function 12: window draw
+    mov  ebx,1    ; Start of draw
     int  0x40
 
-				; DRAW WINDOW ( Type 4 )
-    mov  eax,0			; Function 0 : define and draw window
+    ; DRAW WINDOW ( Type 4 )
+    mov  eax,0   ; Function 0 : define and draw window
     mov  ebx,[screenx]
     sub  ebx,1
     mov  ecx,[screeny]
     sub  ecx,30
     shl  ecx,16
     add  ecx,29
-    mov  edx,0x01000000 	; Color of work area RRGGBB,8->color gl
-    mov  esi,0x01000000 	; Pointer to window label (asciiz) or z
-    mov  edi,0;                 ; Pointer to menu struct or zero
+    mov  edx,0x01000000  ; Color of work area RRGGBB,8->color gl
+    mov  esi,0x01000000  ; Pointer to window label (asciiz) or z
+    mov  edi,0           ; Pointer to menu struct or zero
     int  0x40
 
     mov  eax, 38
@@ -161,7 +250,7 @@ draw_window:
     sub  edx , 0x030303
     add  ecx , 1 shl 16 + 1
     cmp  cx  , 29
-    jb	 newline
+    jb   newline
 
     mov  eax, 38
     mov  ebx, [screenx]
@@ -171,7 +260,7 @@ draw_window:
 
     mov  eax,8
     mov  ebx,20 shl 16 + 89
-    mov  ecx,4	shl 16 + 19
+    mov  ecx,4 shl 16 + 19
     mov  edx,100
     mov  esi,0x20d4d4d4
     int  0x40
@@ -187,15 +276,15 @@ draw_window:
     add  edx,1
     add  ebx,140*3
     cmp  dx,22
-    jb	 newpicline
+    jb   newpicline
 
     mov  ebx,21 shl 16 + 89
-    mov  ecx,5	shl 16 + 19
+    mov  ecx,5 shl 16 + 19
     mov  ebp,0xffffff
     mov  edi,ebp
     call draw_rectangle
     mov  ebx,20 shl 16 + 89
-    mov  ecx,4	shl 16 + 19
+    mov  ecx,4 shl 16 + 19
     mov  ebp,0x606060
     mov  edi,ebp
     call draw_rectangle
@@ -208,11 +297,10 @@ draw_window:
 
     call draw_time
 
-    mov  [checksum],dword 0
     call display_applications
 
-    mov  eax,12 		; Function 12: window draw
-    mov  ebx,2			; End of draw
+    mov  eax,12   ; Function 12: window draw
+    mov  ebx,2    ; End of draw
     int  0x40
 
     ret
@@ -248,7 +336,7 @@ draw_time:
 
     mov  [text+2],byte ':'
     test ebp , 0x010000
-    jz	 dtl1
+    jz   dtl1
     mov  [text+2],byte ' '
   dtl1:
 
@@ -265,7 +353,7 @@ draw_time:
     mov  edi,0xf0f0f0
     call draw_rectangle
 
-    mov  eax,4			; Draw info text
+    mov  eax,4   ; Draw info text
     mov  ebx,[screenx]
     sub  ebx,55
     shl  ebx,16
@@ -277,20 +365,22 @@ draw_time:
 
     ret
 
+
 draw_separator:
 
     mov  eax, 38
     mov  ebx, ecx
     shl  ebx, 16
     add  bx , cx
-    mov  ecx, 27
-    mov  edx, 0xe0e0e0
+    mov  ecx, 28
+    mov  edx, 0x444444
     int  0x40
     add  ebx, 1 shl 16 + 1
-    mov  edx, 0x606060
+    mov  edx, 0xe0e0e0
     int  0x40
 
     ret
+
 
 draw_rectangle:
 
@@ -370,7 +460,7 @@ read_applications:
     cld
     rep  movsb
 
-    mov  eax , [osworkarea]
+    mov  eax , [osworkarea+10]
     add  [checksum],eax
 
     pop  ecx
@@ -378,7 +468,7 @@ read_applications:
     add  ecx , 1
 
     cmp  ecx , 64
-    jb	 newappread
+    jb   newappread
 
     mov  [appcount],dword 64
 
@@ -390,6 +480,7 @@ display_applications:
     mov  [appx],dword 10
     mov  [appp],dword apps
     mov  [appl],dword 4*6+13
+    mov  [appdraw],dword 0
 
     mov  eax , 1
     mov  edi , apps
@@ -399,13 +490,16 @@ display_applications:
     push eax edi
 
     cmp  [edi],dword 'OS/I'
-    je	 noappdisplay
+    je   noappdisplay
     cmp  [edi],dword 'ICON'
-    je	 noappdisplay
+    je   noappdisplay
     cmp  [edi],word 'MD'
-    je	 noappdisplay
+    je   noappdisplay
     cmp  [edi],dword 'MPAN'
-    je	 noappdisplay
+    je   noappdisplay
+
+    mov  ebx , [appdraw]
+    mov  [appslot+ebx*4],eax
 
     mov  eax,edi
     mov  ebx,0
@@ -418,7 +512,7 @@ display_applications:
   lenfound:
 
     cmp  ebx , 0
-    je	 noappdisplay
+    je   noappdisplay
 
     imul ebx , 6
     add  ebx , 13
@@ -431,6 +525,8 @@ display_applications:
 
     mov  [appp],dword edi
     call draw_app
+
+    add  [appdraw],dword 1
 
     mov  eax , [appl]
     add  eax , 6*3
@@ -455,11 +551,20 @@ display_applications:
     ret
 
 
+
 draw_app:
 
     mov  eax,13
     mov  ebx,[appx]
     add  ebx,143
+
+    mov  ecx , [appdraw]
+    imul ecx , 4
+    mov  [appxpos+ecx],ebx
+    mov  edx , [appl]
+    add  edx , ebx
+    mov  [appxend+ecx],edx
+
     shl  ebx,16
     add  ebx,[appl]
     mov  ecx,6 shl 16 + 14+2
@@ -470,7 +575,7 @@ draw_app:
     mov  edi,0xf0f0f0
     call draw_rectangle
 
-    mov  eax,4			; Draw info text
+    mov  eax,4   ; Draw info text
     mov  ebx,[appx]
     add  ebx,143+8
     shl  ebx,16
@@ -489,62 +594,56 @@ draw_app:
 
 text:
 
-    db	 '15:28',0
+    db  '15:28',0
 
 screenx: dq 0x0
 screeny: dq 0x0
 
-appx:	 dd 0
-appp:	 dd 0
-appl:	 dd 0
+appx:  dd 0
+appp:  dd 0
+appl:  dd 0
 
 checksum: dq 0x0
 
-menu_struct:		   ; Menu Struct
-
-    dq	 0		   ; Version
-
-    dq	 0x100		   ; Start value of ID to return ( ID + Line )
-
-			   ; Returned when menu closes and
-			   ; user made no selections.
-
-    db	 0,'FILE',0	   ; ID = 0x100 + 1
-    db	 1,'New',0	   ; ID = 0x100 + 2
-    db	 1,'Open..',0	   ; ID = 0x100 + 3
-    db	 1,'Save..',0	   ; ID = 0x100 + 4
-    db	 1,'-',0	   ; ID = 0x100 + 5
-    db	 1,'Quit',0	   ; ID = 0x100 + 6
-
-    db	 0,'HELP',0	   ; ID = 0x100 + 7
-    db	 1,'Contents..',0  ; ID = 0x100 + 8
-    db	 1,'About..',0	   ; ID = 0x100 + 9
-
-    db	 255		   ; End of Menu Struct
+loopcount: dd 0x0
 
 startapp:
 
-    dd	 16
-    dd	 0
-    dd	 param
-    dd	 0
-    dd	 0x10000
-    db	 '/rd/1/mdm',0
-
-param: db 'AA.00000000.MAINMENU.',0
+    dd  16
+    dd  0
+    dd  param
+    dd  0
+    dd  0x10000
+    db  '/rd/1/mdm',0
 
 loadfile:
 
-    dd	 0
-    dd	 0
-    dd	 100
-    dd	 0x20000
-    dd	 0x10000
-    db	 '/rd/1/mpanel.bmp',0
+    dd  0
+    dd  0
+    dd  100
+    dd  0x20000
+    dd  0x10000
+    db  '/rd/1/mpanel.bmp',0
+
+startclock:
+
+    dd  16
+    dd  0
+    dd  0
+    dd  0
+    dd  0x10000
+    db  '/fd/1/aclock',0
+
+param: db 'AA.00000000.MAINMENU.',0
 
 appcount:   dd 0
 childpid:   dq 0x0
 ipcmessage: db 'T',0
+
+appdraw: dd 0x0
+appxpos: times 256 dd ?
+appxend: times 256 dd ?
+appslot: times 256 dd ?
 
 processtable: times 2000 db ?
 

@@ -1,15 +1,15 @@
 ;
-;    CHESS CLIENT for CHESSCLUB.COM
+;    CHESS CLIENT for FREECHESS.ORG
 ;
 ;    Copyright Ville Turjanmaa
 ;
 ;    Compile with FASM for Menuet
 ;
-   
+
 use32
-   
+
                 org     0x0
-   
+
                 db      'MENUET00'              ; 8 byte id
                 dd      38                      ; required os
                 dd      START                   ; program start
@@ -17,15 +17,15 @@ use32
                 dd      0x100000                ; required amount of memory
                                                 ; esp = 0x7FFF0
                 dd      0x00000000              ; reserved=no extended header
-   
-   
+
+
 file_info:
-   
+
       dd  0,0,-1,0x4000,0x20000
       db  '/rd/1/chess.bmp',0
-   
+
 pawn_color:
-   
+
      dd  0x000000
      dd  0x222222
      dd  0x444444
@@ -42,28 +42,28 @@ pawn_color:
      dd  0xe8e8e8
      dd  0x00ff00
      dd  0xffffff
-   
-   
-   
+
+
+
 texts  equ  board_old+80*30
-   
+
 text   equ  texts+80*32*4
-   
-   
+
+
 START:                          ; start of execution
-   
+
     mov  eax,58
     mov  ebx,file_info
     int  0x40
-   
+
     mov  esi,0x4000+22*3+4+24*2
     mov  edi,0x10000+18*3
-   
+
     mov  ebx,0
     mov  ecx,0
-   
+
   newp:
-   
+
     xor  eax,eax
     mov  al,[esi]
     and  al,0xf0
@@ -71,96 +71,96 @@ START:                          ; start of execution
     shl  eax,2
     mov  eax,[pawn_color+eax]
     mov  [edi+0],eax
-   
+
     xor  eax,eax
     mov  al,[esi]
     and  al,0x0f
     shl  eax,2
     mov  eax,[pawn_color+eax]
     mov  [edi+3],eax
-   
+
     add  edi,6
     add  esi,1
-   
+
     inc  ebx
     cmp  ebx,23
     jbe  newp
-   
+
     sub  edi,12
-   
+
     mov  ebx,0
-   
+
     inc  ecx
     cmp  ecx,279
     jb   newp
-   
+
     ; Clear the screen memory
     mov     eax, '    '
     mov     edi,text
     mov     ecx,80*30 /4
     cld
     rep     stosd
-   
-   
+
+
     call draw_window
-   
+
 still:
-   
+
     call  check_for_board
-   
+
     call  board_changed
-   
+
     call  draw_board
-   
+
     ; check connection status
     mov  eax,53
     mov  ebx,6
     mov  ecx,[socket]
     int  0x40
-   
+
     mov     ebx, [socket_status]
     mov     [socket_status], eax
-   
+
     cmp     eax, ebx
     je      waitev
-   
+
     call    display_status
-   
+
 waitev:
     mov  eax,23                 ; wait here for event
     mov  ebx,20
     int  0x40
-   
+
     cmp  eax,1                  ; redraw request ?
     je   red
     cmp  eax,2                  ; key in buffer ?
     je   key
     cmp  eax,3                  ; button in buffer ?
     je   button
-   
+
     ; any data from the socket?
-   
+
     mov     eax, 53
     mov     ebx, 2
     mov     ecx, [socket]
     int     0x40
     cmp     eax, 0
     jne      read_input
-   
+
     jmp  still
-   
-   
+
+
 read_input:
-   
+
     push ecx
     mov     eax, 53
     mov     ebx, 3
     mov     ecx, [socket]
     int     0x40
     pop  ecx
-   
+
     call    handle_data
-   
+
     push    ecx
     mov     eax, 53
     mov     ebx, 2
@@ -168,18 +168,18 @@ read_input:
     int     0x40
     pop     ecx
     cmp     eax, 0
-   
-   
+
+
     jne   read_input
     call draw_text
     jmp  still
-   
-   
-   
+
+
+
 check_for_board:
-   
-    pusha  
-   
+
+    pusha
+
     mov  esi,text-80
    news:
     add  esi,80
@@ -195,122 +195,122 @@ check_for_board:
   cfb2:
     cmp  [esi+2*80+11],dword '+---'
     jne  news
-   
+
     cmp  [esi+4*80+11],dword '+---'
     jne  news
-   
+
   board_found:
     dec  esi
     mov  edi,chess_board
     mov  ecx,80*18
     cld
     rep  movsb
-   
+
    board_not_found:
-   
+
      popa
-   
+
      ret
-   
-   
+
+
 yst     dd  150
 textx   equ 10
 ysts    equ 410
-   
+
 boardx  dd 45
 boardy  dd 45
-   
+
 boardxs dd 44
 boardys dd 44
-   
+
 conx    equ 420
 cony    equ 118
-   
+
 dconx   equ 420
 dcony   equ 148
-   
+
 statusx equ 420
 statusy equ 178
-   
-   
+
+
 drsq:
-   
+
      push eax ebx
-   
+
      mov  ecx,ebx
      mov  ebx,eax
-   
+
      mov  eax,ebx
      add  eax,ecx
-   
+
      imul ebx,[boardxs]
      add  ebx,[boardx]
      shl  ebx,16
      imul ecx,[boardys]
      add  ecx,[boardy]
      shl  ecx,16
-   
+
      add  ebx,[boardxs]
      add  ecx,[boardys]
-   
+
      mov  edx,[sq_black]
      test eax,1
      jnz  dbl22
      mov  edx,[sq_white]
    dbl22:
-   
+
      mov  eax,13
      int  0x40
-   
+
      pop  ebx eax
-   
+
      ret
-   
-   
-   
+
+
+
 draw_pawn:
-   
+
 ;    edi,0  ; white / black
 ;    esi,0  ; from position 2  , 20 square
 ;    eax,2  ; board x
 ;    ebx,0  ; board y
-   
+
      pusha
-   
+
      call drsq
-   
+
      cmp  esi,20
      jne  no_sqd
-   
+
      popa
      ret
-   
+
    no_sqd:
-   
+
      imul eax,[boardxs]
      imul ebx,[boardys]
-   
+
      add  eax,[boardx]
      add  ebx,[boardy]
-   
+
      imul esi,44*45*3
      add  esi,0x10000+18*3
-   
+
      mov  ecx,43
-   
+
    dp0:
-   
+
      pusha
-   
+
      mov  ecx,44
-   
+
    ldp1:
-   
+
      pusha
-   
+
      mov  ecx,ebx
      mov  ebx,eax
-   
+
      mov  edx,[esi]
      and  edx,0xffffff
      mov  eax,1
@@ -323,32 +323,32 @@ draw_pawn:
    nobl:
      int  0x40
    nowp:
-   
+
      popa
-   
+
      add  esi,3
      add  eax,1
-   
+
      dec  ecx
      jnz  ldp1
-   
+
      popa
-   
+
      add  ebx,1
      add  esi,3*44
-   
+
      dec  ecx
      jnz  dp0
-   
+
      popa
-   
+
      ret
-   
-   
+
+
 board_changed:
-   
+
     pusha
-   
+
     mov  eax,0
     mov  esi,chess_board
   bcl1:
@@ -356,36 +356,36 @@ board_changed:
     add  esi,4
     cmp  esi,chess_board+19*80
     jb   bcl1
-   
+
     cmp  eax,[checksum]
     je   bcl2
     mov  [changed],1
   bcl2:
     mov  [checksum],eax
-   
+
     popa
-   
+
     ret
-   
-   
-   
+
+
+
 checksum dd 0
-   
+
 changed db 1
 
 draw_board:
-   
+
     pusha
-   
+
     cmp   [changed],1
     jne   no_change_in_board
     mov   [changed],0
     mov   eax,0
     mov   ebx,0
   scan_board:
-   
+
     push  eax ebx
-   
+
     mov   esi,ebx
     imul  esi,2
     imul  esi,80
@@ -439,7 +439,7 @@ draw_board:
     add   ecx,46*8
     mov   edx,[wcolor]
     int   0x40
-    mov   eax,4                    
+    mov   eax,4
     mov   ebx,[boardx]
     sub   ebx,14
     shl   ebx,16
@@ -469,7 +469,7 @@ draw_board:
 
     ; Letters
 
-    mov   eax,4                    
+    mov   eax,4
     mov   ebx,[boardx]
     add   ebx,3
     shl   ebx,16
@@ -488,15 +488,15 @@ draw_board:
     add   edx,4
     cmp   edx,chess_board+80*17+8+4*8
     jb    db3
-   
+
     ; Player times
-   
+
     mov   edi,74
     cmp   [chess_board+80+5],byte '1'
     jne   nowww2
     mov   edi,371
   nowww2:
-   
+
     mov   eax,13
     mov   ebx,(conx)*65536+100
     mov   ecx,edi
@@ -516,7 +516,7 @@ draw_board:
     je    nowww
     mov   edi,371
   nowww:
-   
+
     mov   eax,13
     mov   ebx,(conx)*65536+100
     mov   ecx,edi
@@ -531,9 +531,9 @@ draw_board:
     mov   edx,chess_board+80*9+59-1
     mov   esi,20
     int   0x40
-   
+
     ; Move #
-   
+
     mov   eax,13
     mov   ebx,conx*65536+120
     mov   ecx,200*65536+10
@@ -546,19 +546,19 @@ draw_board:
     mov   edx,chess_board+80*1+46
     mov   esi,30
     int   0x40
-   
+
   no_change_in_board:
-   
+
     popa
     ret
-   
-   
-   
+
+
+
 handle_data:
     ; Telnet servers will want to negotiate options about our terminal window
     ; just reject them all.
     ; Telnet options start with the byte 0xff and are 3 bytes long.
-   
+
     mov     al, [telnetstate]
     cmp     al, 0
     je      state0
@@ -567,24 +567,24 @@ handle_data:
     cmp     al, 2
     je      state2
     jmp     hd001
-   
+
 state0:
     cmp     bl, 255
     jne     hd001
     mov     al, 1
     mov     [telnetstate], al
     ret
-   
+
 state1:
     mov     al, 2
     mov     [telnetstate], al
     ret
-   
+
 state2:
     mov     al, 0
     mov     [telnetstate], al
     mov     [telnetrep+2], bl
-   
+
     mov     edx, 3
     mov     eax,53
     mov     ebx,7
@@ -592,7 +592,7 @@ state2:
     mov     esi, telnetrep
     int     0x40
     ret
-   
+
 hd001:
     cmp  bl,13                          ; BEGINNING OF LINE
     jne  nobol
@@ -607,12 +607,12 @@ hd001:
     cmp  edx,0
     jne  boll1
     mov  [pos],ecx
-   
+
     call check_for_board
-   
+
     jmp  newdata
   nobol:
-   
+
     cmp  bl,10                            ; LINE DOWN
     jne  nolf
    addx1:
@@ -626,13 +626,13 @@ hd001:
     mov  eax,[pos]
     jmp  cm1
   nolf:
-   
+
     cmp  bl,9                             ; TAB
     jne  notab
     add  [pos],dword 8
     jmp  newdata
   notab:
-   
+
     cmp  bl,8                            ; BACKSPACE
     jne  nobasp
     mov  eax,[pos]
@@ -642,7 +642,7 @@ hd001:
     mov  [eax+text+60*80],byte 0
     jmp  newdata
    nobasp:
-   
+
     cmp  bl,15                           ; CHARACTER
     jbe  newdata
     mov  eax,[pos]
@@ -665,20 +665,20 @@ hd001:
     mov  [pos],eax
   newdata:
     ret
-   
-   
+
+
   red:                          ; REDRAW WINDOW
     call draw_window
     jmp  still
-   
+
   key:                          ; KEY
     mov  eax,2                  ; send to modem
     int  0x40
-   
+
     mov     ebx, [socket_status]
     cmp     ebx, 4              ; connection open?
     jne     still               ; no, so ignore key
-   
+
     shr  eax,8
     cmp  eax,178                ; ARROW KEYS
     jne  noaup
@@ -705,49 +705,50 @@ hd001:
     jmp  still
   noaleft:
   modem_out:
-   
+
     call    to_modem
-   
+
     jmp  still
-   
+
   button:                       ; BUTTON
     mov  eax,17
     int  0x40
     cmp  ah,1                   ; CLOSE PROGRAM
     jne  noclose
-   
+
     mov  eax,53
     mov  ebx,8
     mov  ecx,[socket]
     int  0x40
-   
+
      mov  eax,-1
      int  0x40
   noclose:
-   
+
     cmp     ah, 4               ; connect
     jne     notcon
-   
+
     mov     eax, [socket_status]
     cmp     eax, 4
-    je     still
+    je      still
+
     call    connect
-   
+
     jmp     still
-   
+
 notcon:
     cmp     ah,5                ; disconnect
     jne     notdiscon
-   
+
     call    disconnect
     jmp  still
-   
+
  notdiscon:
-   
+
     jmp     still
-   
+
 arrow:
-   
+
     push eax
     mov  al,27
     call to_modem
@@ -755,10 +756,10 @@ arrow:
     call to_modem
     pop  eax
     call to_modem
-   
+
     ret
-   
-   
+
+
 to_modem:
     pusha
     push    ax
@@ -777,103 +778,96 @@ tm_000:
     mov     al, [echo]
     cmp     al, 0
     je      tm_001
-   
+
     push    bx
     call    handle_data
     pop     bx
-   
+
     cmp     bl, 13
     jne     tm_002
-   
+
     mov     bl, 10
     call    handle_data
-   
+
 tm_002:
     call    draw_text
-   
+
 tm_001:
     popa
     ret
-   
-   
-   
+
+
+
 disconnect:
     mov  eax,53
     mov  ebx,8
     mov  ecx,[socket]
     int  0x40
     ret
-   
-   
-   
+
+
+
 connect:
+
     pusha
-   
- mov     ecx, 1000  ; local port starting at 1000
-   
-getlp:
- inc     ecx
- push ecx
- mov     eax, 53
- mov     ebx, 9
- int     0x40
- pop     ecx
- cmp     eax, 0   ; is this local port in use?
- jz  getlp      ; yes - so try next
-   
+
+    mov     ecx, 1000  ; local port starting at 1000
+  getlp:
+    inc     ecx
+    push ecx
+    mov     eax, 53
+    mov     ebx, 9
+    int     0x40
+    pop     ecx
+    cmp     eax, 0   ; is this local port in use?
+    jz      getlp    ; yes - so try next
+
     mov     eax,53
     mov     ebx,5
-    mov     dl, [ip_address + 3]
-    shl     edx, 8
-    mov     dl, [ip_address + 2]
-    shl     edx, 8
-    mov     dl, [ip_address + 1]
-    shl     edx, 8
-    mov     dl, [ip_address]
-    mov     esi, edx
-    movzx   edx, word [port]      ; telnet port id
-    mov     edi,1      ; active open
+    mov     esi,dword [ip_address]
+    movzx   edx, word [port]    ; telnet port id
+    mov     edi,1               ; active open
     int     0x40
     mov     [socket], eax
-   
+
     popa
-   
+
     ret
-   
-   
-   
+
+
+
 ;   *********************************************
 ;   *******  WINDOW DEFINITIONS AND DRAW ********
 ;   *********************************************
-   
-   
+
+
 draw_window:
-   
+
     pusha
-   
+
     mov  eax,12
     mov  ebx,1
     int  0x40
-   
+
     mov  eax,14
     int  0x40
-   
+
     mov  ebx,eax
     mov  ecx,eax
-   
+
     shr  ebx,16
     and  ebx,0xffff
     and  ecx,0xffff
-   
+
     shr  ebx,1
     shr  ecx,1
-   
+
     sub  ebx,275
     sub  ecx,235
-   
+
     shl  ebx,16
     shl  ecx,16
-   
+
     mov  eax,0                     ; DRAW WINDOW
     mov  bx,550
     mov  cx,470
@@ -882,9 +876,9 @@ draw_window:
     mov  esi,window_label
     mov  edi,0
     int  0x40
-   
+
     call display_status
-   
+
     mov  eax,8                     ; BUTTON 4: Connect
     mov  ebx,conx*65536+80
     mov  ecx,cony*65536+15
@@ -893,8 +887,8 @@ draw_window:
     mov  edx,4
     mov  edi , cont
     int  0x40
-  
-   
+
+
     mov  eax,8                     ; BUTTON 5: disconnect
     mov  ebx,dconx*65536+80
     mov  ecx,dcony*65536+15
@@ -902,57 +896,57 @@ draw_window:
     mov  esi,0x10000000
     mov  edi,dist
     int  0x40
-   
+
     xor  eax,eax
     mov  edi,text+80*30
     mov  ecx,80*30 /4
     cld
     rep  stosd
-   
+
     call draw_text
-   
+
     mov  [changed],1
-   
+
     mov  edi,board_old
     mov  ecx,80*19
     mov  al,0
     cld
     rep  stosb
-   
+
     mov  eax,4
     mov  ebx,conx*65536+52
     mov  ecx,[tcolor]
     mov  edx,quick_start
     mov  esi,30
-   
+
   prqs:
-   
+
     int  0x40
     add  ebx,10
     add  edx,30
     cmp  [edx],byte 'x'
     jne  prqs
-   
+
     mov  eax,12
     mov  ebx,2
     int  0x40
-   
+
     popa
-   
+
     ret
-   
-   
+
+
 display_status:
-   
+
     pusha
-   
+
     ; draw status bar
     mov  eax, 13
     mov  ebx, statusx*65536+80
     mov  ecx, statusy*65536 + 16
     mov  edx, [wcolor]
     int  0x40
-   
+
     mov  esi,contlen-contt          ; display connected status
     mov  edx, contt
     mov  eax, [socket_status]
@@ -965,44 +959,44 @@ display_status:
     mov  ebx,statusx*65536+statusy+2
      mov  ecx,[tcolor]
      int  0x40
-   
+
     popa
     ret
-   
-   
+
+
 pawns:
-   
+
     dd '*P  ',5
     dd '*K  ',3
     dd '*Q  ',4
     dd '*R  ',0
     dd '*N  ',1
     dd '*B  ',2
-   
+
     dd '    ',20
-   
+
     dd 'P   ',5
     dd 'K   ',3
     dd 'Q   ',4
     dd 'R   ',0
     dd 'N   ',1
     dd 'B   ',2
-   
-   
+
+
 row   dd  0x0
 col   dd  0x0
-   
-   
-   
+
+
+
 draw_text:
-   
+
     mov  esi,text+80*24
     mov  edi,texts+80*3
-   
+
   dtl1:
 
     jmp  add_text
-   
+
     cmp  [esi],dword 'logi'
     je   add_text
     cmp  [esi],dword 'aics'
@@ -1017,57 +1011,57 @@ draw_text:
     je   add_text
     cmp  [esi],dword 'No s'
     je   add_text
-   
+
     sub  esi,80
     cmp  esi,text
     jge  dtl1
-   
+
   dtl2:
-   
+
     mov  eax,13
     mov  ebx,10*65536+532
     mov  ecx,420*65536+40
     mov  edx,[wtcom]
     int  0x40
-   
+
     mov  eax,4
     mov  ebx,10*65536+420
     mov  ecx,[wtxt]
     mov  edx,texts
     mov  esi,80
-   
+
   dtl3:
-   
+
     int  0x40
     add  edx,80
     add  ebx,10
     cmp  edx,texts+4*80
     jb   dtl3
-   
+
     ret
-   
+
   add_text:
-   
+
     pusha
-   
+
     cld
     mov  ecx,80
     rep  movsb
-   
+
     popa
-   
-   
+
+
     sub  esi,80
     sub  edi,80
-   
+
     cmp  edi,texts
     jb   dtl2
-   
+
     jmp  dtl1
-   
-   
+
+
 read_string:
-   
+
     mov  edi,string
     mov  eax,'_'
     mov  ecx,[string_length]
@@ -1075,7 +1069,7 @@ read_string:
     cld
     rep  stosb
     call print_text
-   
+
     mov  edi,string
   f11:
     mov  eax,10
@@ -1104,24 +1098,24 @@ read_string:
   keyok:
     mov  [edi],al
     call print_text
-   
+
     inc  edi
     mov  esi,string
     add  esi,[string_length]
     cmp  esi,edi
     jnz  f11
-   
+
   read_done:
-   
+
     call print_text
-   
+
     ret
-   
-   
+
+
 print_text:
-   
+
     pusha
-   
+
     mov  eax,13
     mov  ebx,[string_x]
     shl  ebx,16
@@ -1132,7 +1126,7 @@ print_text:
     mov  cx,8
     mov  edx,[wcolor]
     int  0x40
-   
+
     mov  eax,4
     mov  ebx,[string_x]
     shl  ebx,16
@@ -1141,26 +1135,26 @@ print_text:
     mov  edx,string
     mov  esi,[string_length]
     int  0x40
-   
+
     popa
     ret
-   
-   
-   
-   
+
+
+
+
 ; DATA AREA
-   
+
 telnetrep       db 0xff,0xfc,0x00
 telnetstate     db 0
-   
+
 string_length  dd    16
 string_x       dd    200
 string_y       dd    60
-   
+
 string         db    '________________'
-   
+
 tx_buff         db  0, 10
-ip_address      db  69,36,243,188  ;  204,178,125,65
+ip_address      db  167,114,65,195 ;  69,36,243,188  ;  204,178,125,65
 port            dw  5000  ;  5051  ;  0,0
 echo            db  1
 socket          dd  0x0
@@ -1168,20 +1162,20 @@ socket_status   dd  0x0
 pos             dd  80 * 22
 scroll          dd  1
                 dd  24
-   
+
 wbutton         dd  0x336688
-   
+
 wtcom           dd  0x336688 ; 0x666666
 wtxt            dd  0xffffff
-   
+
 wcolor          dd  0xe0e0e0
 tcolor          dd  0x000000
-   
+
 sq_black        dd  0x336688 ; 666666
 sq_white        dd  0xffffff
 
 window_label:
-                db  'CHESSCLUB.COM CLIENT',0
+                db  'FREECHESS.ORG CLIENT',0
 
 setipt          db  '               .   .   .'
 setiplen:
@@ -1197,13 +1191,13 @@ echot        db  'Echo On'
 echolen:
 echoot        db  'Echo Off'
 echoolen:
-   
+
 quick_start:
-   
+
     db  'OPPONENT                      '
-   
+
    times 16  db  '                             1'
-   
+
     db  'Quick start:                  '
     db  '                              '
     db  '1 Connect                     '
@@ -1216,74 +1210,74 @@ quick_start:
     db  '5 aics% "resign"              '
     db  '  (quit game)                 '
     db  '6 Disconnect                  '
-   
+
   times 5  db  '                              '
-   
+
     db  'YOU                           '
-   
+
     db  'x'
-   
-   
+
+
 chess_board:
-   
+
     times  80    db 0
-   
+
  db '     8    *R  *N  *B  *Q  *K  *B  *N  *R'
  db '                                        '
-   
+
      times  80  db 0
-   
+
  db '     7    *P  *P  *P  *P  *P  *P  *P  *P'
  db '                                        '
-   
+
      times  80  db 0
-   
+
  db '     6                                  '
  db '                                        '
-   
+
      times  80  db 0
-   
+
  db '     5                                  '
  db '                                        '
-   
+
      times  80  db 0
-   
+
  db '     4                                  '
  db '                                        '
-   
+
      times  80  db 0
-   
+
  db '     3                                  '
  db '                                        '
-   
+
      times  80  db 0
-   
+
  db '     2    P   P   P   P   P   P   P   P '
  db '                                        '
-   
+
     times  80      db 0
-   
+
  db '     1    R   N   B   Q   K   B   N   R '
  db '                                        '
-   
+
     times  80      db 0
-   
+
  db '          a   b   c   d   e   f   g   h '
  db '                                        '
-   
-   
+
+
     times  80*20 db 0
-   
+
 board_old:
-   
-   
+
+
 I_END:
-   
-   
-   
-   
-   
-   
-   
-   
-   
+
+
+
+
+
+
+
+
+

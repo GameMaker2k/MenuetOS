@@ -290,7 +290,7 @@ calc      dd  0
 fcolor    dd  2
 xx        db  'x'
 type      dd  0
-delay     dd  0
+delay     dd  1
 FireSeed  dd  0x1234
 text:     db 'FIRE FOR MENUET'
 textlen:
