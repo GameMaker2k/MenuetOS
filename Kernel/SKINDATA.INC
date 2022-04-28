@@ -38,10 +38,11 @@ _buttonPy       dd      2
 _buttonPw       dd      17
 _buttonPh       dd      18
 
-defbuttoncolor    dd   0x364660 ; 365260
-defbuttoncolor2   dd   0xc0c0c0 
 
-_colorframe     dd      0x23364F ; 00365260
+defbuttoncolor    dd   0x465670  ; 364660 ; 365260
+defbuttoncolor2   dd   0xc8c8c8  ; c0c0c0 
+
+_colorframe     dd      0x33465f ; 23364F ; 00365260
 _colorborder    dd      0x0
 _coloroutborder dd      0x0
 
