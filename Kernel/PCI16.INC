@@ -26,17 +26,17 @@ init_pci_16:
     mov [es:0x9022],bx
     mov [es:0x9024],edi
 
-; we have a PCI BIOS, so check which configuration mechanism(s)
-; it supports
-; AL = PCI hardware characteristics (bit0 => mechanism1, bit1 => mechanism2)
+    ; we have a PCI BIOS, so check which configuration mechanism(s)
+    ; it supports
+    ; AL = PCI hardware characteristics (bit0-mechanism1,bit1-mechanism2)
 
     test al,1
     jnz pci16skip
     test al,2
     jz pci16skip
-    mov byte [es:0x9020],2 ; if (al&3)==2 => mechanism 2
+    mov byte [es:0x9020],2 ; if (al&3)==2 => mechanism2
 
-pci16skip:
+  pci16skip:
 
     mov ax,0x1000
     mov es,ax

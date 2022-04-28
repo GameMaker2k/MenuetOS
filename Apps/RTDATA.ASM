@@ -1,20 +1,20 @@
 ;
-;   RT data example
+;   COMMUNICATING WITH MODEM: PORTS & IRQ
 ;
 ;   Compile with FASM for Menuet
 ;
 
 use32
 
-    org    0x0
+               org    0x0
 
-    db     'MENUET01'              ; 8 byte id
-    dd     0x01                    ; header version
-    dd     START                   ; start of code
-    dd     I_END                   ; size of image
-    dd     0x100000                ; memory for app
-    dd     0x7fff0                 ; esp
-    dd     0x0 , 0x0               ; I_Param , I_Icon
+               db     'MENUET01'              ; 8 byte id
+               dd     0x01                    ; header version
+               dd     START                   ; start of code
+               dd     I_END                   ; size of image
+               dd     0x100000                ; memory for app
+               dd     0x7fff0                 ; esp
+               dd     0x0 , 0x0               ; I_Param , I_Icon
 
 
 START:                          ; start of execution
@@ -159,6 +159,14 @@ draw_window:
     mov  edx,0x04ffffff            ; color of work area RRGGBB,8->color gl
     mov  esi,window_label          ; color of grab bar  RRGGBB,8->color gl
     mov  edi,0                     ; color of frames    RRGGBB
+    int  0x40
+
+                                   ; CLOSE BUTTON
+    mov  eax,8                     ; function 8 : define and draw button
+    mov  ebx,(300-19)*65536+12     ; [x start] *65536 + [x size]
+    mov  ecx,5*65536+12            ; [y start] *65536 + [y size]
+    mov  edx,1                     ; button id
+    mov  esi,0x6688dd              ; button color RRGGBB
     int  0x40
 
     mov  ebx,20*65536+35           ; draw info text with function 4

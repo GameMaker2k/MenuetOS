@@ -115,7 +115,7 @@ draw_window:
 
    
     mov  ebx,25*65536+35           ; draw info text with function 4
-    mov  ecx,0x224466
+    mov  ecx,0x000000
     mov  edx,text
     mov  esi,40
   newline:

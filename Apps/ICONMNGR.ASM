@@ -693,7 +693,7 @@ draw_window:
     mov  eax , 13
     add  ebx , 1 * 65536 -1
     add  ecx , 1 * 65536 -1
-    mov  edx , 0x882222
+    mov  edx , 0x808080
     int  0x40
     pop  edx ecx ebx eax
   noresb:

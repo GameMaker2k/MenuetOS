@@ -178,15 +178,15 @@ text:
 
 scroll_value:
 
-    dd   1000+190
+    dd   1000+100
 
 scroll_value2:
 
-    dd   2000+190
+    dd   2000+100
 
 button_label:
 
-    db   'CLICK ME!',0
+    db   'CLICK ME',0
 
 window_label:
 

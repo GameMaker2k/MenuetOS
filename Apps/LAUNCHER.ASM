@@ -32,11 +32,11 @@ START:
 
     call    draw_window
 
-    mov     ecx,25
-newdelay2:
-    ; Delay for 50ms
+    mov     ecx,16
+  newdelay2:
+    ; Delay for 30ms
     mov     eax,5
-    mov     ebx,2
+    mov     ebx,3
     int     0x40
     call    update_candy
     loop    newdelay2
@@ -411,7 +411,7 @@ launch_applications:
     ; Get the third application option
 
     mov     eax,[ecx+64]
-    mov     cl, 40
+    mov     cl, 30
     div     cl
     xor     ecx, ecx
     mov     cl, al
@@ -419,15 +419,11 @@ launch_applications:
   newdelay:
 
     mov  eax,5
-    mov  ebx,2
-    int  0x40       ; Wait 20ms
-    call update_candy
-    mov  eax,5
-    mov  ebx,2
-    int  0x40       ; Wait 20ms
+    mov  ebx,3
+    int  0x40       ; Wait 30ms
     call update_candy
 
-    loop newdelay   ; wait 40ms * the value defined in 3rd param ( div by 2 )
+    loop newdelay   ; wait 30ms * the value defined in 3rd param ( div by 2 )
 
     pop  ecx
 
@@ -455,11 +451,11 @@ update_candy:
     imul ecx,3
     mov  ebx,0x80000+32*3
     add  ebx,ecx
-    mov  ecx,(251-10)*65536+1
-    mov  edx,(15+5)*65536+83-3-3-1
+    mov  ecx,(241-40)*65536+1
+    mov  edx,(15+5)*65536+75
     mov  edi,4
   newddd:
-    mov  esi,10+1
+    mov  esi,12
   newdd:
     mov  eax,7
     int  0x40
@@ -493,9 +489,8 @@ make_table:
     pop  ecx
     loop newgg
 
-
     mov  edi,0x80000+64*3
-    mov  eax,0x8899cc
+    mov  eax,0x6688bb
 
     mov  ecx,10+2
   newgg2:
@@ -559,13 +554,13 @@ draw_window:
     shl  ecx,16
 
     shr  eax,17
-    sub  eax,140
+    sub  eax,(280-40)/2
     shl  eax,16
     mov  ebx,eax
                                    ; DRAW WINDOW
     mov  eax,0                     ; function 0 : define and draw window
-    mov  bx,280                    ; [x start] *65536 + [x size]
-    mov  cx,105-3                    ; [y start] *65536 + [y size]
+    mov  bx,280-40                 ; [x start] *65536 + [x size]
+    mov  cx,105-3                  ; [y start] *65536 + [y size]
     mov  edx,0x04ffffff            ; color of work area RRGGBB,8->color gl
     mov  esi,window_label          ; color of grab bar  RRGGBB,8->color gl
     mov  edi,0                     ; color of frames    RRGGBB
@@ -573,7 +568,7 @@ draw_window:
 
                                    ; APPLICATION // PARAMETER
     mov  eax,4                     ; function 4 : write text to window
-    mov  ebx,80*65536+48           ; [x start] *65536 + [y start]
+    mov  ebx,(80-40/2)*65536+48    ; [x start] *65536 + [y start]
     mov  ecx,0x000000              ; color of text RRGGBB
     mov  edx,text                  ; pointer to text beginning
     mov  esi,textlen-text          ; text length

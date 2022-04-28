@@ -1,7 +1,23 @@
 ;
 ;   MEMORY MAP
 ;
-;   Boot:
+;   Boot sector:
+;
+;   0:0600 -> 0:17FF    4.5k   floppy Fat during boot
+;   0:2800 -> 0:43FF    7k     floppy root directory during boot
+;	   <- 0:7BFF    20b    processor stack during boot
+;   0:7c00 -> 0:7FFF    512b   boot program (set by BIOS)
+;   1000:0 -> 2AC0:0    110k   kernel
+;
+;   Kernel 16bit (boot):
+;
+;   0:0600 -> 0:17FF    4.5k   floppy Fat
+;   0:2800 -> 0:43FF    7k     MBR (1 sector) & floppy root directory
+;   0:4400 -> 0:4DFF    2.5k   configuration file loaded
+;   0:a000 -> 0:a1ff    512b   temporary buffer during kernel init
+;	   <- 2000:FFFF 100b   temporary kernel stack (limits kernel size)
+;
+;   Kernel 16bit (for runtime):
 ;
 ;   0:9000     byte   bits per pixel
 ;   0:9001     word   scanline length
@@ -17,8 +33,10 @@
 ;   0:9020     8bytes pci data
 ;   0:9030     byte   memory model
 ;
+;   6000:0 -> 6000:fbff	64k   1st paging table
+;   7000:0 -> 7000:003f	64b   2nd paging table
 ;
-;   Runtime:
+;   Kernel 32bit (runtime):
 ;
 ;   0000  ->   2FFF   window_data   - 256 entries
 ;

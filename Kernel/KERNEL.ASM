@@ -146,21 +146,20 @@ ring1_code     equ  1+ring1_code_l-gdts
 
 ; CR0 Flags - Protected mode and Paging
 
-        mov     ecx,0x00000001
-        and     ebx,65535
-        cmp     ebx,00100000000000000b ; lfb -> paging
-        jb      no_paging
-        mov     ax,0x0000
-        mov     es,ax
-        mov     al,[es:0x901E]
-        cmp     al,1
-        je      no_paging
-        or      ecx, 0x80000000
+        push    word 0
+	pop	es
+	mov	ecx,0x00000001
+	mov	bx,[es:9008]		; get video mode (bootcode.inc)
+	and	ebx,0xffff
+	cmp	ebx,0100000000000000b	; lfb -> paging
+	jb	no_paging
+	mov	al,[es:0x901E]
+	cmp	al,1
+	je	no_paging
+	or	ecx,0x80000000
        no_paging:
 
 ; Enabling 32 bit protected mode
-
- ;;       sidt    [cs:old_ints_h-0x10000]
 
         cli                             ; disable all irqs
         cld

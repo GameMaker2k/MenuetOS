@@ -181,7 +181,7 @@ draw_usage:
 
 window_label:
 
-     db   'CPU LOAD',0
+     db   'CPU USE',0
    
 pros:
    
