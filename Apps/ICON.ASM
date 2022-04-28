@@ -101,10 +101,18 @@ still:
     jmp  still
 
   button:          ; button
-    mov  eax,17          ; get id
+    mov  eax,17    ; get id
     int  0x40
 
-    cmp  ah,1          ; button id=1 ?
+ ;   mov  eax,23    ; delay
+ ;   mov  ebx,50
+ ;   int  0x40
+ ;   cmp  eax,3
+ ;   jne  noid1
+
+ ;   mov  eax,17    ; get id
+ ;   int  0x40
+    cmp  ah,1      ; button id=1 ?
     jnz  noid1
 
     mov  eax,58
@@ -151,6 +159,7 @@ check_mouse:
      ret
 
 flip_icon:
+     ret
      pusha
      mov  [bgrload],byte 1
      mov  eax,1
@@ -211,7 +220,7 @@ draw_window:
     mov  eax,8   ; button
     mov  ebx,50
     mov  ecx,50
-    mov  edx,1
+    mov  edx,1 ; + 1 shl 29
     mov  esi,0
     int  0x40
 

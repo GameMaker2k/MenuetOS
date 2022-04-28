@@ -12,13 +12,13 @@ use32
 
     org  0x0
 
-    db   'MENUET01'             ; Header id
-    dd   0x01                   ; Version
-    dd   START                  ; Start of code
-    dd   I_END                  ; Size of image
-    dd   0x100000               ; Memory for app
-    dd   0x7fff0                ; Esp
-    dd   param,0x0              ; I_Param,I_Icon
+    db	 'MENUET01'		; Header id
+    dd	 0x01			; Version
+    dd	 START			; Start of code
+    dd	 I_END			; Size of image
+    dd	 0x100000		; Memory for app
+    dd	 0x7fff0		; Esp
+    dd	 param,0x0		; I_Param,I_Icon
 
 row equ 34
 
@@ -26,7 +26,7 @@ row equ 34
 ; 0x20000 mpanel.dat
 ; 0x30000 image
 
-START:                          ; Start of execution
+START:				; Start of execution
 
     mov  eax , 58
     mov  ebx , loadlist
@@ -50,7 +50,7 @@ START:                          ; Start of execution
     cmp  [esi+1],byte ']'
     jne  noposfound
     cmp  [edi],byte '.'
-    je   posfound
+    je	 posfound
   noposfound:
     add  esi , 1
     jmp  newp
@@ -58,7 +58,7 @@ START:                          ; Start of execution
     mov  edi , param+12
     add  esi , 1
     cmp  esi , 0x20000+16000
-    jb   newp
+    jb	 newp
     ; not found
     mov  eax , -1
     int  0x40
@@ -78,9 +78,9 @@ START:                          ; Start of execution
     cmp  [esi], byte 10
     jne  nocount
     cmp  [esi+1],byte '#'
-    je   nocount
+    je	 nocount
     cmp  [esi+1],byte ' '
-    jb   countfound
+    jb	 countfound
     add  esi , 1
     mov  [edi],esi
     add  edi , 4
@@ -140,48 +140,48 @@ START:                          ; Start of execution
     mov   [edi], dl
     sub   edi , 1
     cmp   edi , menuparam+3
-    ja    newpid
+    ja	  newpid
 
 still:
 
-    mov  eax,23                 ; Wait here for event
+    mov  eax,23 		; Wait here for event
     mov  ebx,5
     int  0x40
 
-    cmp  eax,1                  ; Redraw request
-    je   red
-    cmp  eax,2                  ; Key in buffer
-    je   key
-    cmp  eax,3                  ; Button in buffer
-    je   button
+    cmp  eax,1			; Redraw request
+    je	 red
+    cmp  eax,2			; Key in buffer
+    je	 key
+    cmp  eax,3			; Button in buffer
+    je	 button
 
     cmp  [ipcarea+8],byte 0
-    je   still
+    je	 still
 
     jmp  terminate
 
 
-red:                            ; Redraw
+red:				; Redraw
     call draw_window
     jmp  still
 
-key:                            ; Key
-    mov  eax,2                  ; Just read it and ignore
+key:				; Key
+    mov  eax,2			; Just read it and ignore
     int  0x40
 
     jmp  terminate
 
 
-button:                         ; Button
-    mov  eax,17                 ; Get id
+button: 			; Button
+    mov  eax,17 		; Get id
     int  0x40
 
     shr  eax , 8
 
     cmp  eax , 100
-    jb   nostart
+    jb	 nostart
     cmp  eax , 150
-    ja   nostart
+    ja	 nostart
     sub  eax , 100
     mov  ebp , eax
     mov  esi , [pointers+ebp*4]
@@ -192,7 +192,7 @@ button:                         ; Button
   nosecondz:
     add  esi , 1
     cmp  [esi],dword 'MENU'
-    je   startnewmenu
+    je	 startnewmenu
     cmp  [esi],byte 0
     jne  nosecondz
   nothirdz:
@@ -292,7 +292,7 @@ startnewmenu:
 send_term_to_parent:
 
     cmp   [ipcarea+8],byte 't'
-    je    noparent
+    je	  noparent
 
     mov   esi , param+3
     mov   ebx , 0
@@ -300,7 +300,7 @@ send_term_to_parent:
     xor   eax , eax
     mov   al  , [esi]
     cmp   al  , '.'
-    je    term1
+    je	  term1
     sub   al  , '0'
     imul  ebx , 10
     add   ebx , eax
@@ -309,7 +309,7 @@ send_term_to_parent:
   term1:
 
     cmp   ebx , 0
-    je    noparent
+    je	  noparent
 
     mov   ecx , ebx
     mov   eax , 60
@@ -329,7 +329,7 @@ send_term_to_child:
     pusha
 
     cmp   [childpid],dword 0
-    je    nosendch
+    je	  nosendch
 
     mov   eax , 60
     mov   ebx , 2
@@ -349,21 +349,21 @@ send_term_to_child:
 
 draw_window:
 
-    mov  eax,12                 ; Function 12: window draw
-    mov  ebx,1                  ; Start of draw
+    mov  eax,12 		; Function 12: window draw
+    mov  ebx,1			; Start of draw
     int  0x40
 
-                                ; DRAW WINDOW ( Type 4 )
-    mov  eax , 0                ; Function 0 : define and draw window
+				; DRAW WINDOW ( Type 4 )
+    mov  eax , 0		; Function 0 : define and draw window
     mov  ebx , [startx]
     shl  ebx , 16
     add  ebx , 130
     mov  ecx , [starty]
     shl  ecx , 16
     add  ecx , [sizey]
-    mov  edx , 0x01ffffff       ; Color of work area RRGGBB,8->color gl
-    mov  esi , 0x01000000       ; Pointer to window label (asciiz) or z
-    mov  edi , 0                ; Pointer to menu struct or zero
+    mov  edx , 0x01ffffff	; Color of work area RRGGBB,8->color gl
+    mov  esi , 0x01000000	; Pointer to window label (asciiz) or z
+    mov  edi , 0		; Pointer to menu struct or zero
     int  0x40
 
     mov  eax , 8
@@ -372,13 +372,13 @@ draw_window:
     mov  edx , 0
     mov  esi , 0xd0d0d0
   newbutton:
-    add  edx , 100
+    add  edx , 100 + 1 shl 29
     int  0x40
-    sub  edx , 100
+    sub  edx , 100 + 1 shl 29
     add  edx , 1
     add  ecx , row shl 16
     cmp  edx , [paramcount]
-    jb   newbutton
+    jb	 newbutton
 
     mov  eax , 38
     mov  ebx , 0 shl 16 + 130
@@ -416,7 +416,7 @@ draw_window:
     int  0x40
 
     mov  edi,pointers
-    mov  eax,4                  ; Draw info text
+    mov  eax,4			; Draw info text
     mov  ebx,50*65536+12+4
     mov  ecx,0x000000
     mov  esi,-1
@@ -482,11 +482,11 @@ draw_window:
     mov  [ecx],edx
     add  eax , 1
     cmp  eax , 32
-    jb   sc10
+    jb	 sc10
     mov  eax , 0
     add  ebx , 1
     cmp  ebx , 32
-    jb   sc10
+    jb	 sc10
     pop  edx
     push edx
     mov  eax , 7
@@ -500,12 +500,12 @@ draw_window:
     add  edx , 4
     add  ebp , 1
     cmp  ebp , [paramcount]
-    jb   newimage
+    jb	 newimage
 
   nopic:
 
-    mov  eax,12                 ; Function 12: window draw
-    mov  ebx,2                  ; End of draw
+    mov  eax,12 		; Function 12: window draw
+    mov  ebx,2			; End of draw
     int  0x40
 
     ret
@@ -515,53 +515,53 @@ draw_window:
 
 loadlist:
 
-    dd   0
-    dd   0
-    dd   -1
-    dd   0x20000
-    dd   0x10000
-    db   '/rd/1/mpanel.dat',0
+    dd	 0
+    dd	 0
+    dd	 -1
+    dd	 0x20000
+    dd	 0x10000
+    db	 '/rd/1/mpanel.dat',0
 
 loadicon:
 
-    dd   0
-    dd   0
-    dd   -1
-    dd   0x30000
-    dd   0x10000
+    dd	 0
+    dd	 0
+    dd	 -1
+    dd	 0x30000
+    dd	 0x10000
     times 256 db 0
 
 childpid: dq 0x0
 
 ipcterm:
-          db 'T',0
+	  db 'T',0
 ipcterm2:
-          db 't',0
+	  db 't',0
 
 newmenu:
 
-    dd    16
-    dd    0
-    dd    menuparam
-    dd    0
-    dd    0x10000
-    db    '/rd/1/mdm',0
+    dd	  16
+    dd	  0
+    dd	  menuparam
+    dd	  0
+    dd	  0x10000
+    db	  '/rd/1/mdm',0
 
 menuparam: db 'BC.00000000.SUBMENU0.',0
 
 filestart:
 
-    dd    16
-    dd    0
-    dd    0
-    dd    0
-    dd    0x10000
-    db    '/rd/1/setup',0
+    dd	  16
+    dd	  0
+    dd	  0
+    dd	  0
+    dd	  0x10000
+    db	  '/rd/1/setup',0
     times 256 db ?
 
 startx: dq 1
 starty: dq 300
-sizey:  dq 268
+sizey:	dq 268
 
 screenx: dq 0
 screeny: dq 0
@@ -570,8 +570,8 @@ beginning: dq 0x0
 paramcount: dq 0x0
 
 ipcarea: db 0,0,0,0
-         dd 0
-         times 64 db 0
+	 dd 0
+	 times 64 db 0
 
 process_info: times 2000 db ?
 

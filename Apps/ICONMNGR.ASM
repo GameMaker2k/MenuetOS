@@ -615,8 +615,8 @@ draw_window:
 
                                    ; DRAW WINDOW
     mov  eax,0
-    mov  ebx,210*65536+300
-    mov  ecx,40*65536+390
+    mov  ebx,240*65536+300
+    mov  ecx,70*65536+390
     mov  edx,0x04ffffff
     mov  esi,window_label
     mov  edi,0
@@ -625,7 +625,7 @@ draw_window:
     mov  eax,13                    ; WINDOW AREA
     mov  ebx,20*65536+260
     mov  ecx,35*65536+200
-    mov  edx,0x204070
+    mov  edx,0x284868
     int  0x40
 
     mov  eax,38                    ; VERTICAL LINE ON WINDOW AREA
@@ -636,7 +636,7 @@ draw_window:
 
     mov  eax,38                    ; HOROZONTAL LINE ON WINDOW AREA
     mov  ebx,20*65536+280
-    mov  ecx,135*65536+135
+    mov  ecx,144*65536+144
     mov  edx,0xffffff
     int  0x40
 

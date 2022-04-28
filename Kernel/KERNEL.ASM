@@ -1,6 +1,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-;;   MenuetOS Copyright 2000-2007 Ville Turjanmaa
+;;   MenuetOS Copyright 2000-2015 Ville Turjanmaa
 ;;
 ;;   See file COPYING for details with these additional details:
 ;;     - All code written in 32 bit x86 assembly language
@@ -88,7 +88,7 @@ kernel_start:
 
                   jmp   start_of_code
 
-version           db    'Menuet32 v0.85                   ',13,10,13,10,0
+version           db    'Menuet32 v0.86                   ',13,10,13,10,0
                   dd    endofcode-0x10000
 
                   db   'Boot02'

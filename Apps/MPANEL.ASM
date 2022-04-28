@@ -261,7 +261,7 @@ draw_window:
     mov  eax,8
     mov  ebx,20 shl 16 + 89
     mov  ecx,4 shl 16 + 19
-    mov  edx,100
+    mov  edx,100 + 1 shl 29
     mov  esi,0x20d4d4d4
     int  0x40
 
@@ -632,7 +632,7 @@ startclock:
     dd  0
     dd  0
     dd  0x10000
-    db  '/fd/1/aclock',0
+    db  '/fd/1/rclock',0
 
 param: db 'AA.00000000.MAINMENU.',0
 
