@@ -1,8 +1,12 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;
 ;   Icon manager
 ;
 ;   Compile with FASM for Menuet
 ;
+;   (c) V.Turjanmaa
+;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 use32
 
@@ -76,7 +80,7 @@ still:
     mov  eax,33
     mov  ebx,icon_lst
     mov  ecx,icon_data
-    mov  edx,52
+    mov  edx,52+25
     imul edx,dword [icons]
     mov  esi,0
     int  0x40
@@ -185,13 +189,13 @@ still:
     mov  esi,[esp]          ; icon application
     add  esi,19
     mov  edi,icon_start_parameters+8+11
-    mov  ecx,11
+    mov  ecx,11+25
     cld
     rep  movsb
 
     mov  esi,[esp]
-    add  esi,33
-    mov  edi,icon_start_parameters+8+11+11
+    add  esi,33+25
+    mov  edi,icon_start_parameters+8+11+11+25
     mov  ecx,7
     cld
     rep  movsb
@@ -208,7 +212,7 @@ still:
     pop  esi
     pop  edi
 
-    add  esi,50+2
+    add  esi,50+25+2
 
     dec  edi
     jnz  start_new
@@ -273,13 +277,13 @@ still:
     inc  dword [icons]
     mov  edi,[icons]
     dec  edi
-    imul edi,52
+    imul edi,52+25
     add  edi,icon_data
 
     mov  [current_icon],edi
 
     mov  esi,icon_default
-    mov  ecx,52
+    mov  ecx,52+25
     cld
     rep  movsb
 
@@ -290,7 +294,6 @@ still:
     jmp  still
 
   no_add_icon:
-
 
     cmp  eax,23                     ; user pressed the remove icon button
     jne  no_remove_icon
@@ -339,13 +342,13 @@ still:
     add  eax,65*256+65
 
     mov  esi,icon_data
-    mov  edi,52
+    mov  edi,52+25
     imul edi,[icons]
     add  edi,icon_data
   news:
     cmp  word [esi],ax
     je   foundi
-    add  esi,52
+    add  esi,52+25
     cmp  esi,edi
     jb   news
     jmp  no_found
@@ -356,7 +359,7 @@ still:
     sub  ecx,esi
 
     mov  edi,esi
-    add  esi,52
+    add  esi,52+25
 
     cld
     rep  movsb
@@ -395,7 +398,7 @@ still:
    findl1:
     cmp  dx,[esi]
     je   foundl1
-    add  esi,50+2
+    add  esi,50+25+2
     loop findl1
     jmp  still
 
@@ -421,7 +424,7 @@ print_strings:
     pusha
 
     mov  eax,13              ; clear text area
-    mov  ebx,100*65536+100
+    mov  ebx,100*65536+190
     mov  ecx,278*65536+40
     mov  edx,0xffffff
     int  0x40
@@ -430,7 +433,7 @@ print_strings:
     mov  ebx,100*65536+278
     mov  ecx,0x000000
     mov  edx,[current_icon]
-    add  edx,33
+    add  edx,33+25
     mov  esi,12
     int  0x40
 
@@ -438,7 +441,7 @@ print_strings:
     add  ebx,14
     mov  edx,[current_icon]
     add  edx,19
-    mov  esi,12
+    mov  esi,12+25
     int  0x40
 
     mov  eax,4               ; icon bmp
@@ -468,7 +471,7 @@ load_icon_list:
 
     add   eax,10
     xor   edx,edx
-    mov   ebx,52
+    mov   ebx,52+25
     div   ebx
     mov   [icons],eax
 
@@ -492,7 +495,7 @@ load_icon_list:
     sub   ebx,65
     add   ebx,icons_reserved
     mov   [ebx],byte 'x'
-    add   esi,50+2
+    add   esi,50+25+2
     loop  ldl1
   icon_list_empty:
 
@@ -512,13 +515,21 @@ check_parameters:
     jmp   apply_changes
 
 
-positions dd 33,19,5
+positions dd 33+25,19,5
+
 
 read_string:
 
     pusha
 
     sub  eax,11
+
+    mov  ebp,12
+    cmp  eax,1
+    jne  nolen2
+    mov  ebp,12+19
+  nolen2:
+
     shl  eax,2
     add  eax,positions
     mov  eax,[eax]
@@ -529,7 +540,7 @@ read_string:
 
     mov  edi,[addr]
     mov  eax,'_'
-    mov  ecx,12
+    mov  ecx,ebp
     cld
     rep  stosb
 
@@ -568,14 +579,14 @@ read_string:
 
     add  edi,1
     mov  esi,[addr]
-    add  esi,12
+    add  esi,ebp
     cmp  esi,edi
     jnz  f11
 
    rs_done:
 
     mov  ecx,[addr]
-    add  ecx,12
+    add  ecx,ebp
     sub  ecx,edi
     mov  eax,32
     cld
@@ -608,7 +619,7 @@ draw_window:
     mov  esi,window_label
     mov  edi,0
     int  0x40
-                    
+
     mov  eax,13                    ; WINDOW AREA
     mov  ebx,20*65536+260
     mov  ecx,35*65536+200
@@ -797,6 +808,7 @@ rem_text db 'PRESS BUTTON OF USED ICON'
 rem_text_len:
 
 icon_name:
+
       db 'ICON       '
 
 icon_start_parameters:
@@ -804,15 +816,17 @@ icon_start_parameters:
       db   25,1,1,1
       db   35,1,1,1
       db   'WRITE   BMP'
-      db   'EDITOR     '
+      db   'EDITOR                              '
       db   'EDITOR ',0,0
 
 icon_default:
-      db   'AA - HD.BMP      - SETUP       - SETUP           *',13,10
 
-icon_data:   ; data length 50+2
+      db   'AA - HD.BMP      - /FD/1/SETUP                          '
+      db   '- SETUP           *',13,10
 
-    times 52*40 db 0
+icon_data:   ; data length 50+25+2
+
+    times (52+25)*40 db 0
 
     nop
 
@@ -823,4 +837,17 @@ I_Param:
     nop
 
 I_END:
+
+
+
+
+
+
+
+
+
+
+
+
+
 

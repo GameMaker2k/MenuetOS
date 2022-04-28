@@ -1,33 +1,28 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;
-;    ICON APPLICATION
-;
+;    Icon application
 ;    Compile with FASM for Menuet
-;
+;    (c) V.Turjanmaa
 ;    August 12, 2004 - 32-bit ICO format support (mike.dld)
 ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 use32
 
   org     0x0
 
-  db      'MENUET00'     ; 8 byte id
-  dd      38             ; required os
+  db      'MENUET01'     ; 8 byte id
+  dd      0x01           ; required os
   dd      START          ; program start
   dd      I_END          ; program image size
-  dd      16384          ; required amount of memory
-                         ; esp = 0x7FFF0
+  dd      I_END+65536    ; required amount of memory
+  dd      stackposition
   dd      I_PARAM
+  dd      0x0
 
-
-; params 4 xpos 4 ypos 11 iconfile 11 startfile 7 label
-;          +0     +4      +8          +19         +30
-
-
-flipdelay = 4
+flipdelay equ 4
 
 START:           ; start of execution
-
-    mov  esp,16300
 
     cmp  [I_PARAM],byte 0
     jne  nohalt
@@ -47,13 +42,17 @@ START:           ; start of execution
     mov  ecx,11
     cld
     rep  movsb
+
     mov  esi,I_PARAM+8+11
     mov  edi,start_file
-    mov  ecx,11
+    mov  ecx,11+25
+    cld
     rep  movsb
-    mov  esi,I_PARAM+8+11+11
+
+    mov  esi,I_PARAM+8+11+11+25
     mov  edi,labelt
     mov  ecx,11
+    cld
     rep  movsb
 
     mov  eax,40          ; get also event background change
@@ -63,10 +62,14 @@ START:           ; start of execution
     call get_bg
     call draw_window
 
+    mov  eax , 5
+    mov  ebx , 100
+    call draw_window
+
 still:
 
     mov  eax,23          ; wait here for event
-    mov  ebx,[flipdelay]
+    mov  ebx,flipdelay
     int  0x40
 
     cmp  eax,1          ; redraw request ?
@@ -104,9 +107,8 @@ still:
     cmp  ah,1          ; button id=1 ?
     jnz  noid1
 
-    mov  eax,19
-    mov  ebx,start_file
-    mov  ecx,0
+    mov  eax,58
+    mov  ebx,start_file_info
     int  0x40
 
     call flip_icon
@@ -150,6 +152,7 @@ check_mouse:
 
 flip_icon:
      pusha
+     mov  [bgrload],byte 1
      mov  eax,1
      call flip
      mov  eax,2
@@ -170,6 +173,7 @@ flip_icon:
      call flip
      mov  eax,0
      call flip
+     mov  [bgrload],byte 0
      popa
      ret
 flip:
@@ -242,7 +246,7 @@ get_bg:
     mov  ebx,fname
     mov  ecx,0
     mov  edx,0xffffffff
-    mov  esi,I_END+256 ; size = 4268 bytes
+    mov  esi,I_END+256  ; size = 4268 bytes
     int  0x40
 
     mov  [itype],0
@@ -251,14 +255,26 @@ get_bg:
     inc  [itype]
   @@:
 
-    mov  ebx,[yw]      ; 4286 - icon file image
-    mov  ecx,0        ; 8112 - 52*52*3 - bg image
-    mov  esi,I_END+256+4286 ;! 54+32*3*33-3
+    mov  ebx,[yw]             ; 4286 - icon file image
+    mov  ecx,0                ; 8112 - 52*52*3 - bg image
+    mov  esi,I_END+256+4286   ;! 54+32*3*33-3
     mov  edi,51*3
+
+    mov  ebp , 0
 
   newb:
 
     push ebx ecx
+
+    cmp  [bgrload],byte 1
+    jne  nogeteax
+
+    mov  eax , [bgrsave+ebp]
+    add  ebp , 3
+    and  eax , 0xffffff
+    jmp  nobpix
+
+  nogeteax:
 
   yesbpix:
 
@@ -322,6 +338,9 @@ get_bg:
     mov  ebx,2
 
     int  0x40
+
+    mov  [bgrsave+ebp],eax
+    add  ebp , 3
 
   nobpix:
 
@@ -491,11 +510,12 @@ draw_text:
     mov   eax,[tl]
     imul  eax,3
     shl   eax,16
-    mov   ebx,26*65536+42
+    mov   ebx,28*65536+42
     sub   ebx,eax
-    movzx ecx,byte [I_PARAM+8+11+11+7]
-    shl   ecx,16
-    add   ebx,ecx
+
+;    movzx ecx,byte [I_PARAM+8+11+11+7+25]
+;    shl   ecx,16
+;    add   ebx,ecx
 
     jmp   shade
 
@@ -542,36 +562,56 @@ draw_text:
 
 ; DATA AREA
 
-itype     db 0
+itype  db 0
 
-start_file  db  'SETUP      '
-fname     db  'HD      BMP'
-labelt:
-     db  ' SETUP     '
+start_file_info:
+
+             dd  16
+             dd  0x0
+             dd  0x0 ; param
+             dd  0x0
+             dd  workarea
+start_file:  db  '/FD/1/SETUP'
+             times 50 db 0
+
+fname       db  'HD      BMP'
+labelt:     db  'SETUP      '
 labellen:
 
 align 4
 
-tl     dd  2
-yw     dd  51
+tl  dd  2
+yw  dd  51
 
-xpos     dd  15
-ypos     dd  185
+xpos  dd  15
+ypos  dd  185
 
-bgrxy     dd  0x0
-scrxy     dd  0x0
+bgrxy   dd  0x0
+scrxy   dd  0x0
 bgrdrawtype dd  0x0
 
 iconstate   dd 0
 pixl dd ?
 add_table0  dd (16-4*4)*3,(16-4*2)*3,(16-4*1)*3,\
-        (16+4*1)*3,(16+4*2)*3,(16+4*4)*3
+               (16+4*1)*3,(16+4*2)*3,(16+4*4)*3
 add_table1  dd 3,6,12,12,6,3
-     dd 4,8,16,16,8,4
+            dd 4,8,16,16,8,4
 add_table2  dd 1,2,4,4,2,1
-     dd 1,2,4,4,2,1
+            dd 1,2,4,4,2,1
 
-I_PARAM:
+bgrload: dd 0x0
+
+bgrsave: times (32*32*4+0x100) db ?
+
+               times 0x1000 db ?
+stackposition: times 0x100 db ?
+
+workarea: times 16384 db ?
+
+I_PARAM:  times 100 db ?
+
+; params: 4 xpos 4 ypos 11 iconfile 11 startfile 7 label
+;           +0     +4      +8          +19         +55
 
 I_END:
 

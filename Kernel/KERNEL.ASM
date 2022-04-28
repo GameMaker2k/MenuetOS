@@ -5895,6 +5895,25 @@ checkmisc:
 
     cmp   [ctrl_alt_del],1
     jne   nocpustart
+    ;
+  newcount:
+    mov   ecx,0
+    mov   eax,[application_table_status]
+  newcadc:
+    cmp   [application_table_status],dword 0
+    je    contcad
+    cmp   eax,[application_table_status]
+    jne   newcount
+    push  eax ebx ecx
+    mov   eax , 1
+    call  delay_hs
+    pop   ecx ebx eax
+    add   ecx , 1
+    cmp   ecx , 200
+    jb    newcadc
+  contcad:
+    mov   [application_table_status],dword 0
+    ;
     mov   eax,cpustring
     call  start_application_fl
     mov   [ctrl_alt_del],0

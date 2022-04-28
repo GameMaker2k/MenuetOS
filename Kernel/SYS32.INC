@@ -2961,11 +2961,6 @@ find_free_mem:
 
       find_free_ret_2:
 
-        cmp    [dec3004],0
-        je     no3004inc
-        inc    dword [0x3004]
-      no3004inc:
-
         pop    edi
         pop    edx
         pop    ecx
@@ -3244,7 +3239,6 @@ start_application_hd:
 threadstring       dd  0x0
 new_process_place  dd  0x0
 check_processes    dd  0x0
-dec3004            db  0x0
 
 app_start    dd  0x0
 app_i_end    dd  0x0
@@ -3349,19 +3343,32 @@ find_free_process_slot:
     cmp   ebx,[0x3004]
     jbe   newfps
 
-    mov   [dec3004],0
+    cmp   dword [0x3004],dword max_processes
+    jae   noaddnewp
+
+    mov   ebx , [0x3004]
+    add   ebx , 1
+    imul  ebx , 0x20
+    mov   [0x3000+ebx+0xa],byte 9
+
+    add   dword [0x3004],dword 1
+    mov   ebx,[0x3004]
+    mov   [check_processes],ebx
+    mov   [new_process_place],ebx
+
+  noaddnewp:
 
     popa
     ret
 
   ffpl:
 
-    mov   [dec3004],1
-    dec   dword [0x3004]
     mov   [new_process_place],ebx
 
     popa
     ret
+
+
 
 
 add_app_parameters:
@@ -3391,7 +3398,6 @@ add_app_parameters:
     loop  app_new_param
   no_app_params:
 
-    inc   dword [0x3004]            ; increase number of processes
     mov   ebx,[new_process_place]
 
     mov   edi,ebx                   ; clear 0x80000 (256 bytes)
@@ -3555,8 +3561,9 @@ terminate: ; terminate application
     cmp   [application_table_status],0
     je    term9
     sti
-    call  change_task
-    jmp   terminate
+
+    ret
+
   term9:
 
     call  set_application_table_status
